@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BarChart3, Users, Server, Edit, Trash2, Globe, Lock } from "lucide-react";
+import { BarChart3, Users, Server, Edit, Trash2, Globe, Lock, Copy, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -283,32 +283,70 @@ export default function DashboardPage() {
                       {new Date(dashboard.updatedAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      {dashboard.isPublic ? (
-                        <div className="flex items-center text-xs text-chart-2">
-                          <Globe className="w-3 h-3 mr-1" />
-                          Public
-                        </div>
-                      ) : (
-                        <div className="flex items-center text-xs text-muted-foreground">
-                          <Lock className="w-3 h-3 mr-1" />
-                          Private
-                        </div>
-                      )}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        {dashboard.isPublic ? (
+                          <div className="flex items-center text-xs text-chart-2">
+                            <Globe className="w-3 h-3 mr-1" />
+                            Public
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <Lock className="w-3 h-3 mr-1" />
+                            Private
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground hover:text-foreground p-1 h-6"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTogglePublic(dashboard);
+                        }}
+                        data-testid={`button-toggle-public-${dashboard.id}`}
+                      >
+                        {dashboard.isPublic ? "Make Private" : "Make Public"}
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs text-muted-foreground hover:text-foreground p-1 h-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTogglePublic(dashboard);
-                      }}
-                      data-testid={`button-toggle-public-${dashboard.id}`}
-                    >
-                      {dashboard.isPublic ? "Make Private" : "Make Public"}
-                    </Button>
+                    {dashboard.isPublic && (
+                      <div className="flex items-center justify-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-muted-foreground hover:text-foreground px-2 h-6 flex-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const publicUrl = `${window.location.origin}/public/dashboard/${dashboard.id}`;
+                            navigator.clipboard.writeText(publicUrl);
+                            toast({
+                              title: "Link copied!",
+                              description: "Public dashboard link copied to clipboard.",
+                            });
+                          }}
+                          data-testid={`button-copy-link-${dashboard.id}`}
+                        >
+                          <Copy className="w-3 h-3 mr-1" />
+                          Copy Link
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-muted-foreground hover:text-foreground px-2 h-6 flex-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const publicUrl = `${window.location.origin}/public/dashboard/${dashboard.id}`;
+                            window.open(publicUrl, '_blank');
+                          }}
+                          data-testid={`button-open-public-${dashboard.id}`}
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          Open
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

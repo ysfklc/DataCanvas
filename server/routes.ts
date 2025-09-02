@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { authenticateUser, createDefaultAdmin, hashPassword } from "./auth";
+import { authenticateUser, createDefaultAdmin, createTestLDAPConfig, createTestLDAPUser, searchLDAPUser, hashPassword } from "./auth";
 import { insertUserSchema, insertDashboardSchema, insertDataSourceSchema, insertDashboardCardSchema, insertSettingSchema } from "@shared/schema";
 import session from "express-session";
 import MemoryStore from "memorystore";
@@ -21,8 +21,10 @@ declare module "express-session" {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize default admin user
+  // Initialize default admin user and test LDAP configuration
   await createDefaultAdmin();
+  await createTestLDAPConfig();
+  await createTestLDAPUser();
 
   // Session configuration
   app.use(session({
@@ -170,6 +172,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(dashboard);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch dashboard" });
+    }
+  });
+
+  // Public dashboard access route
+  app.get("/api/public/dashboards/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const dashboard = await storage.getDashboard(id);
+      
+      if (!dashboard) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      if (!dashboard.isPublic) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      res.json(dashboard);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch dashboard" });
+    }
+  });
+
+  // Public dashboard cards access route
+  app.get("/api/public/dashboards/:id/cards", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const dashboard = await storage.getDashboard(id);
+      
+      if (!dashboard) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      if (!dashboard.isPublic) {
+        return res.status(404).json({ message: "Dashboard not found" });
+      }
+
+      const cards = await storage.getCardsByDashboard(id);
+      res.json(cards);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch dashboard cards" });
     }
   });
 
@@ -331,6 +374,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(setting);
     } catch (error) {
       res.status(400).json({ message: "Failed to save setting" });
+    }
+  });
+
+  // LDAP user search endpoint
+  app.get("/api/auth/search-ldap/:username", requireAdmin, async (req, res) => {
+    try {
+      const { username } = req.params;
+      
+      if (!username || username.trim() === "") {
+        return res.status(400).json({ message: "Username is required" });
+      }
+
+      const userInfo = await searchLDAPUser(username);
+      
+      if (!userInfo) {
+        return res.status(404).json({ message: "User not found in LDAP directory" });
+      }
+
+      res.json({
+        message: "User found successfully",
+        user: userInfo
+      });
+    } catch (error) {
+      console.error("LDAP user search error:", error);
+      res.status(500).json({ message: "LDAP user search failed" });
+    }
+  });
+
+  // LDAP test endpoint
+  app.post("/api/auth/test-ldap", requireAdmin, async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+
+      const ldapSettings = await storage.getSetting("ldap_config");
+      if (!ldapSettings) {
+        return res.status(404).json({ message: "LDAP configuration not found" });
+      }
+
+      // Test LDAP authentication (this won't actually connect to a server in test mode)
+      res.json({ 
+        message: "LDAP configuration loaded successfully", 
+        config: {
+          url: (ldapSettings.value as any).url,
+          baseDN: (ldapSettings.value as any).baseDN,
+          searchFilter: (ldapSettings.value as any).searchFilter,
+        },
+        note: "This is a test configuration. In production, this would attempt to authenticate against the LDAP server."
+      });
+    } catch (error) {
+      res.status(500).json({ message: "LDAP test failed" });
     }
   });
 

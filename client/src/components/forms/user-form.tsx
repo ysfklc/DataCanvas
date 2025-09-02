@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { UserPlus, Save } from "lucide-react";
+import { UserPlus, Save, Search, UserIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
@@ -23,6 +23,11 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const [role, setRole] = useState(user?.role || "standard");
   const [authMethod, setAuthMethod] = useState(user?.authMethod || "local");
   const [isActive, setIsActive] = useState(user?.isActive ?? true);
+  
+  // LDAP search states
+  const [ldapSearchUsername, setLdapSearchUsername] = useState("");
+  const [ldapSearchStatus, setLdapSearchStatus] = useState<'idle' | 'searching' | 'found' | 'not-found'>('idle');
+  const [ldapUserInfo, setLdapUserInfo] = useState<any>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -65,10 +70,59 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     },
   });
 
+  const searchLdapMutation = useMutation({
+    mutationFn: (username: string) => apiRequest("GET", `/api/auth/search-ldap/${username}`),
+    onMutate: () => {
+      setLdapSearchStatus('searching');
+    },
+    onSuccess: (data: any) => {
+      setLdapSearchStatus('found');
+      setLdapUserInfo(data.user);
+      
+      // Auto-populate form fields
+      if (data.user) {
+        setUsername(data.user.username || "");
+        setEmail(data.user.email || "");
+      }
+      
+      toast({
+        title: "User found",
+        description: `Found user: ${data.user.fullName || data.user.username}`,
+      });
+    },
+    onError: (error: any) => {
+      setLdapSearchStatus('not-found');
+      setLdapUserInfo(null);
+      toast({
+        title: "User not found",
+        description: error.message || "User not found in LDAP directory",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLdapSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!ldapSearchUsername.trim()) {
+      toast({
+        title: "Validation error",
+        description: "Please enter a username to search.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    searchLdapMutation.mutate(ldapSearchUsername);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!username || !email || (!user && !password)) {
+    // For LDAP users, password is not required
+    const isPasswordRequired = authMethod === "local" && !user;
+    
+    if (!username || !email || (isPasswordRequired && !password)) {
       toast({
         title: "Validation error",
         description: "Please fill in all required fields.",
@@ -83,7 +137,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       role,
       authMethod,
       isActive,
-      ...(password && { password }),
+      ...(password && authMethod === "local" && { password }),
     };
 
     if (user) {
@@ -121,20 +175,25 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="password">
-          {user ? "New Password (leave blank to keep current)" : "Password"}
-        </Label>
-        <Input
-          id="password"
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          data-testid="input-password"
-          required={!user}
-        />
-      </div>
+      {/* Password field - only show for local auth or editing existing users */}
+      {(authMethod === "local" || user) && (
+        <div className="space-y-2">
+          <Label htmlFor="password">
+            {user ? "New Password (leave blank to keep current)" : "Password"}
+            {authMethod === "ldap" && <span className="text-muted-foreground ml-2">(LDAP users authenticate via LDAP server)</span>}
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            data-testid="input-password"
+            required={!user && authMethod === "local"}
+            disabled={authMethod === "ldap" && !!user}
+          />
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="role">Role</Label>
@@ -161,6 +220,64 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
           </SelectContent>
         </Select>
       </div>
+
+      {/* LDAP User Search */}
+      {authMethod === "ldap" && !user && (
+        <div className="space-y-4 border border-border rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <UserIcon className="w-4 h-4 text-primary" />
+            <Label className="text-sm font-medium">LDAP User Search</Label>
+          </div>
+          
+          <div className="flex space-x-2">
+            <div className="flex-1">
+              <Input
+                type="text"
+                placeholder="Enter LDAP username..."
+                value={ldapSearchUsername}
+                onChange={(e) => setLdapSearchUsername(e.target.value)}
+                data-testid="input-ldap-search"
+              />
+            </div>
+            <Button 
+              type="button"
+              variant="outline"
+              onClick={handleLdapSearch}
+              disabled={searchLdapMutation.isPending}
+              data-testid="button-ldap-search"
+            >
+              <Search className="w-4 h-4 mr-2" />
+              {searchLdapMutation.isPending ? "Searching..." : "Search"}
+            </Button>
+          </div>
+          
+          {/* Search Status */}
+          {ldapSearchStatus === 'found' && ldapUserInfo && (
+            <div className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 p-3 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <UserIcon className="w-4 h-4" />
+                <span className="text-sm font-medium">User Found</span>
+              </div>
+              <div className="mt-2 text-sm">
+                <p><strong>Full Name:</strong> {ldapUserInfo.fullName}</p>
+                <p><strong>Username:</strong> {ldapUserInfo.username}</p>
+                <p><strong>Email:</strong> {ldapUserInfo.email}</p>
+                <p className="text-xs text-green-700 dark:text-green-400 mt-1">
+                  User information has been automatically populated below.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {ldapSearchStatus === 'not-found' && (
+            <div className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 p-3 rounded-lg">
+              <div className="text-sm">
+                <p>User not found in LDAP directory. Please check the username and try again.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <Label htmlFor="isActive">Active User</Label>

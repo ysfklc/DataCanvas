@@ -12,6 +12,7 @@ import UsersPage from "@/pages/users";
 import SettingsPage from "@/pages/settings";
 import LoginPage from "@/pages/login";
 import NotFound from "@/pages/not-found";
+import PublicDashboardPage from "@/pages/public-dashboard";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -39,7 +40,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Router() {
+function ProtectedRouter() {
   return (
     <Switch>
       <Route path="/" component={DashboardPage} />
@@ -56,9 +57,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <AppLayout>
-            <Router />
-          </AppLayout>
+          <Switch>
+            <Route path="/public/dashboard/:id" component={PublicDashboardPage} />
+            <Route>
+              <AppLayout>
+                <ProtectedRouter />
+              </AppLayout>
+            </Route>
+          </Switch>
           <Toaster />
         </TooltipProvider>
       </AuthProvider>
