@@ -1,0 +1,1243 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataBoard - Dashboard Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          borderRadius: {
+            lg: "var(--radius)",
+            md: "calc(var(--radius) - 2px)",
+            sm: "calc(var(--radius) - 4px)",
+          },
+          colors: {
+            background: "var(--background)",
+            foreground: "var(--foreground)",
+            card: {
+              DEFAULT: "var(--card)",
+              foreground: "var(--card-foreground)",
+            },
+            popover: {
+              DEFAULT: "var(--popover)",
+              foreground: "var(--popover-foreground)",
+            },
+            primary: {
+              DEFAULT: "var(--primary)",
+              foreground: "var(--primary-foreground)",
+            },
+            secondary: {
+              DEFAULT: "var(--secondary)",
+              foreground: "var(--secondary-foreground)",
+            },
+            muted: {
+              DEFAULT: "var(--muted)",
+              foreground: "var(--muted-foreground)",
+            },
+            accent: {
+              DEFAULT: "var(--accent)",
+              foreground: "var(--accent-foreground)",
+            },
+            destructive: {
+              DEFAULT: "var(--destructive)",
+              foreground: "var(--destructive-foreground)",
+            },
+            border: "var(--border)",
+            input: "var(--input)",
+            ring: "var(--ring)",
+            chart: {
+              "1": "var(--chart-1)",
+              "2": "var(--chart-2)",
+              "3": "var(--chart-3)",
+              "4": "var(--chart-4)",
+              "5": "var(--chart-5)",
+            }
+          },
+          fontFamily: {
+            sans: ["Inter", "system-ui", "sans-serif"],
+          }
+        },
+      }
+    };
+    </script>
+    <style>
+        :root {
+            --radius: 0.5rem;
+            --background: hsl(0 0% 100%);
+            --foreground: hsl(222 84% 4.9%);
+            --card: hsl(0 0% 100%);
+            --card-foreground: hsl(222 84% 4.9%);
+            --popover: hsl(0 0% 100%);
+            --popover-foreground: hsl(222 84% 4.9%);
+            --primary: hsl(221 83% 53%);
+            --primary-foreground: hsl(210 40% 98%);
+            --secondary: hsl(210 40% 96%);
+            --secondary-foreground: hsl(222 47% 11%);
+            --muted: hsl(210 40% 96%);
+            --muted-foreground: hsl(215 16% 46%);
+            --accent: hsl(210 40% 96%);
+            --accent-foreground: hsl(222 47% 11%);
+            --destructive: hsl(0 84% 60%);
+            --destructive-foreground: hsl(210 40% 98%);
+            --border: hsl(214 32% 91%);
+            --input: hsl(214 32% 91%);
+            --ring: hsl(221 83% 53%);
+            --chart-1: hsl(12 76% 61%);
+            --chart-2: hsl(173 58% 39%);
+            --chart-3: hsl(197 37% 24%);
+            --chart-4: hsl(43 74% 66%);
+            --chart-5: hsl(27 87% 67%);
+        }
+
+        .dark {
+            --background: hsl(222 84% 4.9%);
+            --foreground: hsl(210 40% 98%);
+            --card: hsl(222 84% 4.9%);
+            --card-foreground: hsl(210 40% 98%);
+            --popover: hsl(222 84% 4.9%);
+            --popover-foreground: hsl(210 40% 98%);
+            --primary: hsl(217 91% 60%);
+            --primary-foreground: hsl(222 47% 11%);
+            --secondary: hsl(217 32% 17%);
+            --secondary-foreground: hsl(210 40% 98%);
+            --muted: hsl(217 32% 17%);
+            --muted-foreground: hsl(215 20% 65%);
+            --accent: hsl(217 32% 17%);
+            --accent-foreground: hsl(210 40% 98%);
+            --destructive: hsl(0 62% 30%);
+            --destructive-foreground: hsl(210 40% 98%);
+            --border: hsl(217 32% 17%);
+            --input: hsl(217 32% 17%);
+            --ring: hsl(224 71% 4%);
+            --chart-1: hsl(220 70% 50%);
+            --chart-2: hsl(160 60% 45%);
+            --chart-3: hsl(30 80% 55%);
+            --chart-4: hsl(280 65% 60%);
+            --chart-5: hsl(340 75% 55%);
+        }
+
+        * {
+            border-color: hsl(var(--border));
+        }
+
+        body {
+            background-color: hsl(var(--background));
+            color: hsl(var(--foreground));
+            font-family: Inter, system-ui, sans-serif;
+        }
+
+        .dashboard-canvas {
+            background-image: radial-gradient(circle, hsl(var(--muted)) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .draggable-card {
+            cursor: move;
+            transition: all 0.2s ease;
+        }
+
+        .draggable-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+            width: 100%;
+        }
+
+        .sidebar-nav {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar-nav.closed {
+                transform: translateX(-100%);
+            }
+        }
+    </style>
+</head>
+<body class="bg-background text-foreground">
+    <!-- @COMPONENT: AppLayout -->
+    <div class="flex h-screen bg-background">
+        <!-- @COMPONENT: Sidebar -->
+        <aside class="sidebar-nav fixed md:relative z-30 w-64 h-full bg-card border-r border-border shadow-lg md:shadow-none">
+            <div class="p-6 border-b border-border">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                        <i class="fas fa-chart-line text-primary-foreground text-sm"></i>
+                    </div>
+                    <h1 class="text-xl font-bold text-foreground">DataBoard</h1>
+                </div>
+            </div>
+            
+            <nav class="p-4">
+                <!-- @STATE: activeSection:string = 'dashboards' -->
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#" data-section="dashboards" class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md bg-primary text-primary-foreground">
+                            <i class="fas fa-th-large w-5"></i>
+                            <span>Dashboards</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-section="datasources" class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+                            <i class="fas fa-database w-5"></i>
+                            <span>Data Sources</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-section="users" class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+                            <i class="fas fa-users w-5"></i>
+                            <span>Users</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-section="settings" class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+                            <i class="fas fa-cog w-5"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="absolute bottom-4 left-4 right-4">
+                <div class="flex items-center space-x-3 p-3 bg-muted rounded-lg">
+                    <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                        <span class="text-primary-foreground text-sm font-medium" data-bind="user.initials">A</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-foreground truncate" data-bind="user.name">Admin User</p>
+                        <p class="text-xs text-muted-foreground" data-bind="user.role">Administrator</p>
+                    </div>
+                    <button class="text-muted-foreground hover:text-foreground">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+        <!-- @END_COMPONENT: Sidebar -->
+
+        <!-- Mobile sidebar overlay -->
+        <div class="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden hidden" id="sidebarOverlay"></div>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- @COMPONENT: TopBar -->
+            <header class="bg-card border-b border-border px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <button class="md:hidden text-muted-foreground hover:text-foreground" id="sidebarToggle">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <h2 class="text-2xl font-semibold text-foreground" data-bind="pageTitle">Dashboard Overview</h2>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors font-medium" data-event="click:createDashboard">
+                            <i class="fas fa-plus mr-2"></i>
+                            New Dashboard
+                        </button>
+                        <button class="text-muted-foreground hover:text-foreground p-2">
+                            <i class="fas fa-bell"></i>
+                        </button>
+                        <button class="text-muted-foreground hover:text-foreground p-2" id="themeToggle">
+                            <i class="fas fa-moon"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+            <!-- @END_COMPONENT: TopBar -->
+
+            <!-- Dashboard Content -->
+            <div class="flex-1 overflow-auto" id="mainContent">
+                <!-- @COMPONENT: DashboardsView -->
+                <div class="section-content" data-section="dashboards">
+                    <div class="p-6">
+                        <!-- Dashboard Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                            <!-- @MAP: dashboards.map(dashboard => ( -->
+                            <div class="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-shadow cursor-pointer" data-event="click:openDashboard">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-chart-bar text-primary text-xl"></i>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button class="text-muted-foreground hover:text-foreground p-1" data-event="click:editDashboard">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-destructive p-1" data-event="click:deleteDashboard">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <h3 class="text-lg font-semibold text-foreground mb-2" data-bind="dashboard.name" data-mock="true">Sales Analytics</h3>
+                                <p class="text-muted-foreground text-sm mb-4" data-bind="dashboard.description" data-mock="true">Real-time sales performance metrics and trends</p>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-muted-foreground" data-bind="dashboard.cardCount" data-mock="true">6 cards</span>
+                                    <span class="text-muted-foreground" data-bind="dashboard.lastUpdated" data-mock="true">2 hours ago</span>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-shadow cursor-pointer" data-event="click:openDashboard">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div class="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-users text-accent text-xl"></i>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button class="text-muted-foreground hover:text-foreground p-1">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-destructive p-1">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <h3 class="text-lg font-semibold text-foreground mb-2" data-mock="true">User Engagement</h3>
+                                <p class="text-muted-foreground text-sm mb-4" data-mock="true">User activity and engagement metrics</p>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-muted-foreground" data-mock="true">4 cards</span>
+                                    <span class="text-muted-foreground" data-mock="true">5 minutes ago</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-shadow cursor-pointer" data-event="click:openDashboard">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div class="w-12 h-12 bg-chart-2/10 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-server text-chart-2 text-xl"></i>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button class="text-muted-foreground hover:text-foreground p-1">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-destructive p-1">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <h3 class="text-lg font-semibold text-foreground mb-2" data-mock="true">System Monitoring</h3>
+                                <p class="text-muted-foreground text-sm mb-4" data-mock="true">Server performance and uptime metrics</p>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-muted-foreground" data-mock="true">8 cards</span>
+                                    <span class="text-muted-foreground" data-mock="true">1 minute ago</span>
+                                </div>
+                            </div>
+                            <!-- @END_MAP )) -->
+                        </div>
+
+                        <!-- Canvas Dashboard View -->
+                        <div class="bg-card rounded-lg border border-border p-6" id="canvasView" style="display: none;">
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <button class="text-muted-foreground hover:text-foreground" data-event="click:backToDashboards">
+                                        <i class="fas fa-arrow-left"></i>
+                                    </button>
+                                    <h3 class="text-xl font-semibold text-foreground" data-bind="currentDashboard.name" data-mock="true">Sales Analytics</h3>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button class="bg-secondary text-secondary-foreground px-3 py-2 rounded-md hover:bg-secondary/80 transition-colors text-sm" data-event="click:addCard">
+                                        <i class="fas fa-plus mr-2"></i>
+                                        Add Card
+                                    </button>
+                                    <button class="bg-primary text-primary-foreground px-3 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm" data-event="click:saveDashboard">
+                                        <i class="fas fa-save mr-2"></i>
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- @FUNCTIONALITY: Canvas area should support drag-and-drop positioning with grid snapping -->
+                            <div class="dashboard-canvas min-h-[600px] relative bg-muted/30 rounded-lg p-4">
+                                <!-- @MAP: dashboardCards.map(card => ( -->
+                                <div class="draggable-card absolute bg-card border border-border rounded-lg shadow-sm" 
+                                     style="top: 20px; left: 20px; width: 320px; height: 240px;" 
+                                     data-card-id="1" data-event="drag:repositionCard">
+                                    <div class="p-4 h-full flex flex-col">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="font-medium text-foreground" data-bind="card.title" data-mock="true">Revenue Trend</h4>
+                                            <div class="flex space-x-1">
+                                                <button class="text-muted-foreground hover:text-foreground p-1" data-event="click:editCard">
+                                                    <i class="fas fa-cog text-xs"></i>
+                                                </button>
+                                                <button class="text-muted-foreground hover:text-foreground p-1" data-event="click:refreshCard">
+                                                    <i class="fas fa-sync text-xs"></i>
+                                                </button>
+                                                <button class="text-muted-foreground hover:text-destructive p-1" data-event="click:deleteCard">
+                                                    <i class="fas fa-times text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 bg-muted/50 rounded-md flex items-center justify-center">
+                                            <div class="text-center">
+                                                <i class="fas fa-chart-line text-2xl text-muted-foreground mb-2"></i>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">Line Chart: $125k Revenue</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="draggable-card absolute bg-card border border-border rounded-lg shadow-sm" 
+                                     style="top: 20px; left: 360px; width: 280px; height: 180px;" 
+                                     data-card-id="2">
+                                    <div class="p-4 h-full flex flex-col">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="font-medium text-foreground" data-mock="true">Active Users</h4>
+                                            <div class="flex space-x-1">
+                                                <button class="text-muted-foreground hover:text-foreground p-1">
+                                                    <i class="fas fa-cog text-xs"></i>
+                                                </button>
+                                                <button class="text-muted-foreground hover:text-foreground p-1">
+                                                    <i class="fas fa-sync text-xs"></i>
+                                                </button>
+                                                <button class="text-muted-foreground hover:text-destructive p-1">
+                                                    <i class="fas fa-times text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 flex items-center justify-center">
+                                            <div class="text-center">
+                                                <div class="text-3xl font-bold text-primary" data-mock="true">2,847</div>
+                                                <p class="text-sm text-muted-foreground" data-mock="true">+12% from last week</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="draggable-card absolute bg-card border border-border rounded-lg shadow-sm" 
+                                     style="top: 280px; left: 20px; width: 420px; height: 300px;" 
+                                     data-card-id="3">
+                                    <div class="p-4 h-full flex flex-col">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="font-medium text-foreground" data-mock="true">Recent Transactions</h4>
+                                            <div class="flex space-x-1">
+                                                <button class="text-muted-foreground hover:text-foreground p-1">
+                                                    <i class="fas fa-cog text-xs"></i>
+                                                </button>
+                                                <button class="text-muted-foreground hover:text-foreground p-1">
+                                                    <i class="fas fa-sync text-xs"></i>
+                                                </button>
+                                                <button class="text-muted-foreground hover:text-destructive p-1">
+                                                    <i class="fas fa-times text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 overflow-auto">
+                                            <table class="w-full text-sm">
+                                                <thead>
+                                                    <tr class="border-b border-border">
+                                                        <th class="text-left py-2 text-muted-foreground">ID</th>
+                                                        <th class="text-left py-2 text-muted-foreground">Amount</th>
+                                                        <th class="text-left py-2 text-muted-foreground">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody data-mock="true">
+                                                    <tr class="border-b border-border">
+                                                        <td class="py-2 text-foreground">#12345</td>
+                                                        <td class="py-2 text-foreground">$299.99</td>
+                                                        <td class="py-2"><span class="px-2 py-1 bg-chart-2/10 text-chart-2 rounded-full text-xs">Completed</span></td>
+                                                    </tr>
+                                                    <tr class="border-b border-border">
+                                                        <td class="py-2 text-foreground">#12346</td>
+                                                        <td class="py-2 text-foreground">$150.00</td>
+                                                        <td class="py-2"><span class="px-2 py-1 bg-chart-4/10 text-chart-4 rounded-full text-xs">Pending</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="py-2 text-foreground">#12347</td>
+                                                        <td class="py-2 text-foreground">$75.50</td>
+                                                        <td class="py-2"><span class="px-2 py-1 bg-chart-2/10 text-chart-2 rounded-full text-xs">Completed</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- @END_MAP )) -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: DashboardsView -->
+
+                <!-- @COMPONENT: DataSourcesView -->
+                <div class="section-content hidden" data-section="datasources">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-semibold text-foreground">Data Sources</h3>
+                            <button class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors font-medium" data-event="click:createDataSource">
+                                <i class="fas fa-plus mr-2"></i>
+                                Add Data Source
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                            <!-- @MAP: dataSources.map(source => ( -->
+                            <div class="bg-card rounded-lg border border-border p-6">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-link text-primary"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-medium text-foreground" data-bind="source.name" data-mock="true">Sales API</h4>
+                                            <p class="text-sm text-muted-foreground" data-bind="source.type" data-mock="true">REST API</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button class="text-muted-foreground hover:text-foreground p-1" data-event="click:testConnection">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-foreground p-1" data-event="click:editDataSource">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-destructive p-1" data-event="click:deleteDataSource">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Status:</span>
+                                        <span class="flex items-center text-chart-2">
+                                            <i class="fas fa-circle text-xs mr-1"></i>
+                                            Connected
+                                        </span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Last Update:</span>
+                                        <span class="text-foreground" data-bind="source.lastUpdate" data-mock="true">2 min ago</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Fields:</span>
+                                        <span class="text-foreground" data-bind="source.fieldCount" data-mock="true">12 mapped</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-card rounded-lg border border-border p-6">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-chart-1/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-database text-chart-1"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-medium text-foreground" data-mock="true">PostgreSQL DB</h4>
+                                            <p class="text-sm text-muted-foreground" data-mock="true">Database Query</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button class="text-muted-foreground hover:text-foreground p-1">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-foreground p-1">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-destructive p-1">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Status:</span>
+                                        <span class="flex items-center text-chart-2">
+                                            <i class="fas fa-circle text-xs mr-1"></i>
+                                            Connected
+                                        </span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Last Query:</span>
+                                        <span class="text-foreground" data-mock="true">1 min ago</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Rows:</span>
+                                        <span class="text-foreground" data-mock="true">1,247</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-card rounded-lg border border-border p-6">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-chart-3/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-spider text-chart-3"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-medium text-foreground" data-mock="true">News Scraper</h4>
+                                            <p class="text-sm text-muted-foreground" data-mock="true">Web Scraping</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button class="text-muted-foreground hover:text-foreground p-1">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-foreground p-1">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="text-muted-foreground hover:text-destructive p-1">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Status:</span>
+                                        <span class="flex items-center text-chart-4">
+                                            <i class="fas fa-circle text-xs mr-1"></i>
+                                            Processing
+                                        </span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Last Scrape:</span>
+                                        <span class="text-foreground" data-mock="true">15 min ago</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-muted-foreground">Elements:</span>
+                                        <span class="text-foreground" data-mock="true">3 configured</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- @END_MAP )) -->
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: DataSourcesView -->
+
+                <!-- @COMPONENT: UsersView -->
+                <div class="section-content hidden" data-section="users">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-semibold text-foreground">User Management</h3>
+                            <button class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors font-medium" data-event="click:createUser">
+                                <i class="fas fa-user-plus mr-2"></i>
+                                Add User
+                            </button>
+                        </div>
+
+                        <div class="bg-card rounded-lg border border-border overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead class="bg-muted/50">
+                                        <tr>
+                                            <th class="text-left p-4 font-medium text-muted-foreground">User</th>
+                                            <th class="text-left p-4 font-medium text-muted-foreground">Role</th>
+                                            <th class="text-left p-4 font-medium text-muted-foreground">Auth Method</th>
+                                            <th class="text-left p-4 font-medium text-muted-foreground">Last Login</th>
+                                            <th class="text-left p-4 font-medium text-muted-foreground">Status</th>
+                                            <th class="text-left p-4 font-medium text-muted-foreground">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody data-mock="true">
+                                        <!-- @MAP: users.map(user => ( -->
+                                        <tr class="border-b border-border hover:bg-muted/30">
+                                            <td class="p-4">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
+                                                        <span class="text-primary-foreground font-medium">A</span>
+                                                    </div>
+                                                    <div>
+                                                        <div class="font-medium text-foreground" data-bind="user.name">Admin User</div>
+                                                        <div class="text-sm text-muted-foreground" data-bind="user.email">admin@example.com</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-4">
+                                                <span class="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium" data-bind="user.role">Administrator</span>
+                                            </td>
+                                            <td class="p-4 text-foreground" data-bind="user.authMethod">Local</td>
+                                            <td class="p-4 text-muted-foreground" data-bind="user.lastLogin">2 hours ago</td>
+                                            <td class="p-4">
+                                                <span class="flex items-center text-chart-2">
+                                                    <i class="fas fa-circle text-xs mr-2"></i>
+                                                    Active
+                                                </span>
+                                            </td>
+                                            <td class="p-4">
+                                                <div class="flex space-x-2">
+                                                    <button class="text-muted-foreground hover:text-foreground p-1" data-event="click:editUser">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="text-muted-foreground hover:text-destructive p-1" data-event="click:deleteUser">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <tr class="border-b border-border hover:bg-muted/30">
+                                            <td class="p-4">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="w-10 h-10 bg-secondary rounded-full flex items-center justify-center">
+                                                        <span class="text-secondary-foreground font-medium">J</span>
+                                                    </div>
+                                                    <div>
+                                                        <div class="font-medium text-foreground">John Smith</div>
+                                                        <div class="text-sm text-muted-foreground">john.smith@company.com</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-4">
+                                                <span class="px-2 py-1 bg-secondary/50 text-secondary-foreground rounded-full text-xs font-medium">Standard User</span>
+                                            </td>
+                                            <td class="p-4 text-foreground">LDAP</td>
+                                            <td class="p-4 text-muted-foreground">1 day ago</td>
+                                            <td class="p-4">
+                                                <span class="flex items-center text-chart-2">
+                                                    <i class="fas fa-circle text-xs mr-2"></i>
+                                                    Active
+                                                </span>
+                                            </td>
+                                            <td class="p-4">
+                                                <div class="flex space-x-2">
+                                                    <button class="text-muted-foreground hover:text-foreground p-1">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="text-muted-foreground hover:text-destructive p-1">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <tr class="hover:bg-muted/30">
+                                            <td class="p-4">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="w-10 h-10 bg-accent rounded-full flex items-center justify-center">
+                                                        <span class="text-accent-foreground font-medium">M</span>
+                                                    </div>
+                                                    <div>
+                                                        <div class="font-medium text-foreground">Mary Johnson</div>
+                                                        <div class="text-sm text-muted-foreground">mary.j@company.com</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="p-4">
+                                                <span class="px-2 py-1 bg-secondary/50 text-secondary-foreground rounded-full text-xs font-medium">Standard User</span>
+                                            </td>
+                                            <td class="p-4 text-foreground">Local</td>
+                                            <td class="p-4 text-muted-foreground">3 days ago</td>
+                                            <td class="p-4">
+                                                <span class="flex items-center text-muted-foreground">
+                                                    <i class="fas fa-circle text-xs mr-2"></i>
+                                                    Inactive
+                                                </span>
+                                            </td>
+                                            <td class="p-4">
+                                                <div class="flex space-x-2">
+                                                    <button class="text-muted-foreground hover:text-foreground p-1">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="text-muted-foreground hover:text-destructive p-1">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <!-- @END_MAP )) -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: UsersView -->
+
+                <!-- @COMPONENT: SettingsView -->
+                <div class="section-content hidden" data-section="settings">
+                    <div class="p-6">
+                        <h3 class="text-xl font-semibold text-foreground mb-6">System Settings</h3>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <!-- LDAP Configuration -->
+                            <div class="bg-card rounded-lg border border-border p-6">
+                                <h4 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                    <i class="fas fa-server mr-2 text-primary"></i>
+                                    LDAP Configuration
+                                </h4>
+                                <form class="space-y-4" data-event="submit:saveLdapSettings">
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">LDAP Host</label>
+                                        <input type="text" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                                               placeholder="ldap.company.com" data-bind="settings.ldapHost" data-mock="true" value="ldap.company.com">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-foreground mb-2">Port</label>
+                                            <input type="number" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                                                   placeholder="389" data-bind="settings.ldapPort" data-mock="true" value="389">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-foreground mb-2">Protocol</label>
+                                            <select class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" data-bind="settings.ldapProtocol">
+                                                <option value="ldap">LDAP</option>
+                                                <option value="ldaps" selected data-mock="true">LDAPS</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox" id="ignoreCert" class="rounded border-input text-primary focus:ring-ring" data-bind="settings.ignoreCertificate" data-mock="true" checked>
+                                        <label for="ignoreCert" class="text-sm text-foreground">Ignore SSL Certificate</label>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">Base DN</label>
+                                        <input type="text" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                                               placeholder="dc=company,dc=com" data-bind="settings.ldapBaseDn" data-mock="true" value="dc=company,dc=com">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">Bind DN</label>
+                                        <input type="text" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                                               placeholder="cn=admin,dc=company,dc=com" data-bind="settings.ldapBindDn" data-mock="true" value="cn=admin,dc=company,dc=com">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">Bind Password</label>
+                                        <input type="password" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                                               placeholder="••••••••" data-bind="settings.ldapBindPassword">
+                                    </div>
+                                    <button type="submit" class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors font-medium">
+                                        <i class="fas fa-save mr-2"></i>
+                                        Save LDAP Settings
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- Dashboard Access Configuration -->
+                            <div class="bg-card rounded-lg border border-border p-6">
+                                <h4 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                    <i class="fas fa-shield-alt mr-2 text-primary"></i>
+                                    Dashboard Access
+                                </h4>
+                                <form class="space-y-4" data-event="submit:saveAccessSettings">
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">Default Access Level</label>
+                                        <select class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" data-bind="settings.defaultAccess">
+                                            <option value="admin">Admin Only</option>
+                                            <option value="standard" selected data-mock="true">Standard User</option>
+                                            <option value="public">Public Access</option>
+                                        </select>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label class="block text-sm font-medium text-foreground">Public Dashboard Settings</label>
+                                        <div class="space-y-2">
+                                            <div class="flex items-center space-x-2">
+                                                <input type="checkbox" id="allowPublicView" class="rounded border-input text-primary focus:ring-ring" data-bind="settings.allowPublicView" data-mock="true" checked>
+                                                <label for="allowPublicView" class="text-sm text-foreground">Allow public dashboard viewing</label>
+                                            </div>
+                                            <div class="flex items-center space-x-2">
+                                                <input type="checkbox" id="requirePublicAuth" class="rounded border-input text-primary focus:ring-ring" data-bind="settings.requirePublicAuth">
+                                                <label for="requirePublicAuth" class="text-sm text-foreground">Require authentication for public dashboards</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-foreground mb-2">Session Timeout (minutes)</label>
+                                        <input type="number" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                                               placeholder="60" data-bind="settings.sessionTimeout" data-mock="true" value="60">
+                                    </div>
+                                    <button type="submit" class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors font-medium">
+                                        <i class="fas fa-save mr-2"></i>
+                                        Save Access Settings
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- Database Configuration -->
+                            <div class="bg-card rounded-lg border border-border p-6 lg:col-span-2">
+                                <h4 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                    <i class="fas fa-database mr-2 text-primary"></i>
+                                    Database Status
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="bg-muted/30 rounded-lg p-4">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-sm font-medium text-foreground">Connection Status</span>
+                                            <i class="fas fa-circle text-chart-2"></i>
+                                        </div>
+                                        <p class="text-2xl font-bold text-chart-2" data-mock="true">Connected</p>
+                                        <p class="text-xs text-muted-foreground" data-mock="true">PostgreSQL 14.2</p>
+                                    </div>
+                                    <div class="bg-muted/30 rounded-lg p-4">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-sm font-medium text-foreground">Total Tables</span>
+                                            <i class="fas fa-table text-primary"></i>
+                                        </div>
+                                        <p class="text-2xl font-bold text-foreground" data-mock="true">12</p>
+                                        <p class="text-xs text-muted-foreground" data-mock="true">Auto-created on startup</p>
+                                    </div>
+                                    <div class="bg-muted/30 rounded-lg p-4">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-sm font-medium text-foreground">Storage Used</span>
+                                            <i class="fas fa-hdd text-chart-1"></i>
+                                        </div>
+                                        <p class="text-2xl font-bold text-foreground" data-mock="true">245 MB</p>
+                                        <p class="text-xs text-muted-foreground" data-mock="true">2.3% of available</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: SettingsView -->
+            </div>
+        </main>
+    </div>
+    <!-- @END_COMPONENT: AppLayout -->
+
+    <!-- @COMPONENT: ModalsAndOverlays -->
+    <!-- Add Data Source Modal -->
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden" id="addDataSourceModal">
+        <div class="bg-card rounded-lg border border-border w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-border">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-foreground">Add Data Source</h3>
+                    <button class="text-muted-foreground hover:text-foreground" data-event="click:closeModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <form class="space-y-6" data-event="submit:createDataSource">
+                    <div>
+                        <label class="block text-sm font-medium text-foreground mb-2">Data Source Type</label>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="border border-border rounded-lg p-4 cursor-pointer hover:bg-accent transition-colors" data-type="api">
+                                <div class="text-center">
+                                    <i class="fas fa-link text-2xl text-primary mb-2"></i>
+                                    <p class="font-medium text-foreground">API</p>
+                                    <p class="text-xs text-muted-foreground">REST endpoints</p>
+                                </div>
+                            </div>
+                            <div class="border border-border rounded-lg p-4 cursor-pointer hover:bg-accent transition-colors" data-type="scraping">
+                                <div class="text-center">
+                                    <i class="fas fa-spider text-2xl text-chart-1 mb-2"></i>
+                                    <p class="font-medium text-foreground">Web Scraping</p>
+                                    <p class="text-xs text-muted-foreground">Extract from web</p>
+                                </div>
+                            </div>
+                            <div class="border border-border rounded-lg p-4 cursor-pointer hover:bg-accent transition-colors" data-type="database">
+                                <div class="text-center">
+                                    <i class="fas fa-database text-2xl text-chart-2 mb-2"></i>
+                                    <p class="font-medium text-foreground">Database</p>
+                                    <p class="text-xs text-muted-foreground">SQL queries</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Configuration -->
+                    <div class="space-y-4" id="apiConfig">
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Data Source Name</label>
+                            <input type="text" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                                   placeholder="My API Source" data-bind="dataSource.name">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">cURL Request</label>
+                            <textarea class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent h-24" 
+                                      placeholder="curl -X GET 'https://api.example.com/data' -H 'Authorization: Bearer TOKEN'" data-bind="dataSource.curlRequest"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Field Mapping</label>
+                            <div class="bg-muted/30 rounded-md p-3 text-sm text-muted-foreground">
+                                <p>• Import your cURL request to automatically parse JSON fields</p>
+                                <p>• Map response fields to dashboard card data</p>
+                                <p>• Configure data transformations and filters</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-3 pt-4 border-t border-border">
+                        <button type="button" class="flex-1 bg-secondary text-secondary-foreground px-4 py-2 rounded-md hover:bg-secondary/80 transition-colors" data-event="click:closeModal">
+                            Cancel
+                        </button>
+                        <button type="submit" class="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>
+                            Create Data Source
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Card Modal -->
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden" id="addCardModal">
+        <div class="bg-card rounded-lg border border-border w-full max-w-lg mx-4">
+            <div class="p-6 border-b border-border">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-foreground">Add Dashboard Card</h3>
+                    <button class="text-muted-foreground hover:text-foreground" data-event="click:closeModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <form class="space-y-4" data-event="submit:createCard">
+                    <div>
+                        <label class="block text-sm font-medium text-foreground mb-2">Card Title</label>
+                        <input type="text" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                               placeholder="My Card" data-bind="card.title">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-foreground mb-2">Data Source</label>
+                        <select class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" data-bind="card.dataSource">
+                            <option value="">Select a data source</option>
+                            <option value="sales-api" data-mock="true">Sales API</option>
+                            <option value="postgresql-db" data-mock="true">PostgreSQL DB</option>
+                            <option value="news-scraper" data-mock="true">News Scraper</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-foreground mb-2">Visualization Type</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="border border-border rounded-lg p-3 cursor-pointer hover:bg-accent transition-colors text-center" data-viz-type="table">
+                                <i class="fas fa-table text-xl text-primary mb-1"></i>
+                                <p class="text-xs font-medium text-foreground">Table</p>
+                            </div>
+                            <div class="border border-border rounded-lg p-3 cursor-pointer hover:bg-accent transition-colors text-center" data-viz-type="chart">
+                                <i class="fas fa-chart-bar text-xl text-chart-1 mb-1"></i>
+                                <p class="text-xs font-medium text-foreground">Chart</p>
+                            </div>
+                            <div class="border border-border rounded-lg p-3 cursor-pointer hover:bg-accent transition-colors text-center" data-viz-type="graph">
+                                <i class="fas fa-chart-line text-xl text-chart-2 mb-1"></i>
+                                <p class="text-xs font-medium text-foreground">Graph</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-foreground mb-2">Refresh Interval</label>
+                        <select class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" data-bind="card.refreshInterval">
+                            <option value="manual">Manual</option>
+                            <option value="30" data-mock="true" selected>30 seconds</option>
+                            <option value="60">1 minute</option>
+                            <option value="300">5 minutes</option>
+                            <option value="900">15 minutes</option>
+                            <option value="3600">1 hour</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-3 pt-4 border-t border-border">
+                        <button type="button" class="flex-1 bg-secondary text-secondary-foreground px-4 py-2 rounded-md hover:bg-secondary/80 transition-colors" data-event="click:closeModal">
+                            Cancel
+                        </button>
+                        <button type="submit" class="flex-1 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>
+                            Add Card
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: ModalsAndOverlays -->
+
+    <!-- Authentication Modal (shown on first load for demo) -->
+    <div class="fixed inset-0 bg-background flex items-center justify-center z-50" id="authModal">
+        <div class="bg-card rounded-lg border border-border w-full max-w-md mx-4 shadow-2xl">
+            <div class="p-8">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-chart-line text-primary-foreground text-2xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-foreground">Welcome to DataBoard</h2>
+                    <p class="text-muted-foreground mt-2">Sign in to access your dashboards</p>
+                </div>
+
+                <form class="space-y-4" data-event="submit:authenticate">
+                    <div>
+                        <label class="block text-sm font-medium text-foreground mb-2">Email or Username</label>
+                        <input type="text" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                               placeholder="admin@example.com" data-bind="auth.username" data-mock="true" value="admin@example.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-foreground mb-2">Password</label>
+                        <input type="password" class="w-full px-3 py-2 bg-background border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent" 
+                               placeholder="••••••••" data-bind="auth.password" data-mock="true" value="admin123">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="remember" class="rounded border-input text-primary focus:ring-ring">
+                            <label for="remember" class="text-sm text-muted-foreground">Remember me</label>
+                        </div>
+                        <a href="#" class="text-sm text-primary hover:underline">Forgot password?</a>
+                    </div>
+                    <button type="submit" class="w-full bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-colors font-medium">
+                        Sign In
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-6 border-t border-border">
+                    <div class="text-center">
+                        <p class="text-sm text-muted-foreground mb-3">Or sign in with</p>
+                        <button class="w-full bg-secondary text-secondary-foreground py-2 rounded-md hover:bg-secondary/80 transition-colors font-medium" data-event="click:ldapAuth">
+                            <i class="fas fa-building mr-2"></i>
+                            LDAP Authentication
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-6 p-3 bg-muted/30 rounded-md">
+                    <p class="text-xs text-muted-foreground text-center">
+                        <strong>Demo Credentials:</strong><br>
+                        Email: admin@example.com<br>
+                        Password: admin123
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // TODO: Implement React state management and API integration
+        (function() {
+            // Navigation handling
+            document.addEventListener('click', function(e) {
+                // Handle navigation
+                if (e.target.closest('.nav-item')) {
+                    e.preventDefault();
+                    const section = e.target.closest('.nav-item').dataset.section;
+                    showSection(section);
+                }
+
+                // Handle sidebar toggle
+                if (e.target.closest('#sidebarToggle')) {
+                    const sidebar = document.querySelector('.sidebar-nav');
+                    const overlay = document.getElementById('sidebarOverlay');
+                    sidebar.classList.toggle('closed');
+                    overlay.classList.toggle('hidden');
+                }
+
+                // Handle modal close
+                if (e.target.closest('[data-event*="closeModal"]') || e.target.id === 'sidebarOverlay') {
+                    document.querySelectorAll('.fixed.z-50').forEach(modal => {
+                        modal.classList.add('hidden');
+                    });
+                    document.getElementById('sidebarOverlay').classList.add('hidden');
+                }
+
+                // Handle dashboard card clicks
+                if (e.target.closest('[data-event*="openDashboard"]')) {
+                    showCanvasView();
+                }
+
+                // Handle back to dashboards
+                if (e.target.closest('[data-event*="backToDashboards"]')) {
+                    hideCanvasView();
+                }
+
+                // Handle auth form submission
+                if (e.target.closest('[data-event*="authenticate"]')) {
+                    e.preventDefault();
+                    document.getElementById('authModal').classList.add('hidden');
+                }
+
+                // Handle add data source
+                if (e.target.closest('[data-event*="createDataSource"]')) {
+                    document.getElementById('addDataSourceModal').classList.remove('hidden');
+                }
+
+                // Handle add card
+                if (e.target.closest('[data-event*="addCard"]')) {
+                    document.getElementById('addCardModal').classList.remove('hidden');
+                }
+
+                // Handle theme toggle
+                if (e.target.closest('#themeToggle')) {
+                    document.documentElement.classList.toggle('dark');
+                    const icon = e.target.closest('#themeToggle').querySelector('i');
+                    icon.className = document.documentElement.classList.contains('dark') ? 
+                        'fas fa-sun' : 'fas fa-moon';
+                }
+            });
+
+            function showSection(sectionName) {
+                // Update navigation
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('bg-primary', 'text-primary-foreground');
+                    item.classList.add('text-muted-foreground', 'hover:bg-accent', 'hover:text-accent-foreground');
+                });
+                document.querySelector(`[data-section="${sectionName}"]`).classList.remove('text-muted-foreground', 'hover:bg-accent', 'hover:text-accent-foreground');
+                document.querySelector(`[data-section="${sectionName}"]`).classList.add('bg-primary', 'text-primary-foreground');
+
+                // Update content
+                document.querySelectorAll('.section-content').forEach(content => {
+                    content.classList.add('hidden');
+                });
+                document.querySelector(`.section-content[data-section="${sectionName}"]`).classList.remove('hidden');
+
+                // Update page title
+                const titles = {
+                    dashboards: 'Dashboard Overview',
+                    datasources: 'Data Sources',
+                    users: 'User Management',
+                    settings: 'System Settings'
+                };
+                document.querySelector('[data-bind="pageTitle"]').textContent = titles[sectionName];
+            }
+
+            function showCanvasView() {
+                document.querySelector('[data-section="dashboards"]').classList.add('hidden');
+                document.getElementById('canvasView').style.display = 'block';
+                document.querySelector('[data-bind="pageTitle"]').textContent = 'Sales Analytics - Edit Mode';
+            }
+
+            function hideCanvasView() {
+                document.querySelector('[data-section="dashboards"]').classList.remove('hidden');
+                document.getElementById('canvasView').style.display = 'none';
+                document.querySelector('[data-bind="pageTitle"]').textContent = 'Dashboard Overview';
+            }
+
+            // Drag and drop simulation
+            let isDragging = false;
+            let dragElement = null;
+            let offset = { x: 0, y: 0 };
+
+            document.addEventListener('mousedown', function(e) {
+                if (e.target.closest('.draggable-card')) {
+                    isDragging = true;
+                    dragElement = e.target.closest('.draggable-card');
+                    const rect = dragElement.getBoundingClientRect();
+                    const canvasRect = dragElement.parentElement.getBoundingClientRect();
+                    offset.x = e.clientX - rect.left;
+                    offset.y = e.clientY - rect.top;
+                    dragElement.style.zIndex = '1000';
+                    dragElement.style.cursor = 'grabbing';
+                }
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (isDragging && dragElement) {
+                    e.preventDefault();
+                    const canvasRect = dragElement.parentElement.getBoundingClientRect();
+                    const newX = Math.max(0, Math.min(e.clientX - canvasRect.left - offset.x, canvasRect.width - dragElement.offsetWidth));
+                    const newY = Math.max(0, Math.min(e.clientY - canvasRect.top - offset.y, canvasRect.height - dragElement.offsetHeight));
+                    
+                    // Snap to grid (20px grid)
+                    const snappedX = Math.round(newX / 20) * 20;
+                    const snappedY = Math.round(newY / 20) * 20;
+                    
+                    dragElement.style.left = snappedX + 'px';
+                    dragElement.style.top = snappedY + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', function(e) {
+                if (isDragging) {
+                    isDragging = false;
+                    if (dragElement) {
+                        dragElement.style.zIndex = '';
+                        dragElement.style.cursor = 'move';
+                        dragElement = null;
+                    }
+                }
+            });
+
+            // Auto-hide auth modal after 3 seconds for demo
+            setTimeout(() => {
+                document.getElementById('authModal').classList.add('hidden');
+            }, 3000);
+        })();
+    </script>
+</body>
+</html>

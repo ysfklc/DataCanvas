@@ -1,0 +1,226 @@
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { Link, Globe, Database, Plus } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
+import type { DataSource } from "@shared/schema";
+
+interface DataSourceFormProps {
+  dataSource?: DataSource | null;
+  onSuccess: () => void;
+  onCancel: () => void;
+}
+
+const dataSourceTypes = [
+  { id: "api", name: "API", description: "REST endpoints", icon: Link },
+  { id: "scraping", name: "Web Scraping", description: "Extract from web", icon: Globe },
+  { id: "database", name: "Database", description: "SQL queries", icon: Database },
+];
+
+export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFormProps) {
+  const [selectedType, setSelectedType] = useState(dataSource?.type || "");
+  const [name, setName] = useState(dataSource?.name || "");
+  const [curlRequest, setCurlRequest] = useState("");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/data-sources", data),
+    onSuccess: () => {
+      toast({
+        title: "Data source created",
+        description: "Your data source has been configured successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/data-sources"] });
+      onSuccess();
+    },
+    onError: () => {
+      toast({
+        title: "Failed to create data source",
+        description: "Please check your configuration and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("PUT", `/api/data-sources/${dataSource?.id}`, data),
+    onSuccess: () => {
+      toast({
+        title: "Data source updated",
+        description: "Your data source has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/data-sources"] });
+      onSuccess();
+    },
+    onError: () => {
+      toast({
+        title: "Failed to update data source",
+        description: "Please check your configuration and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedType || !name) {
+      toast({
+        title: "Validation error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const config = selectedType === "api" ? { curlRequest } : {};
+    
+    const data = {
+      name,
+      type: selectedType,
+      config,
+    };
+
+    if (dataSource) {
+      updateMutation.mutate(data);
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-4">
+        <Label className="text-sm font-medium text-foreground">Data Source Type</Label>
+        <div className="grid grid-cols-3 gap-4">
+          {dataSourceTypes.map((type) => {
+            const IconComponent = type.icon;
+            return (
+              <Card 
+                key={type.id}
+                className={cn(
+                  "cursor-pointer transition-colors hover:bg-accent",
+                  selectedType === type.id && "ring-2 ring-primary bg-accent"
+                )}
+                onClick={() => setSelectedType(type.id)}
+                data-testid={`card-data-source-type-${type.id}`}
+              >
+                <CardContent className="p-4 text-center">
+                  <IconComponent className="w-8 h-8 mx-auto mb-2 text-primary" />
+                  <p className="font-medium text-foreground">{type.name}</p>
+                  <p className="text-xs text-muted-foreground">{type.description}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="dataSourceName">Data Source Name</Label>
+        <Input
+          id="dataSourceName"
+          type="text"
+          placeholder="My API Source"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          data-testid="input-data-source-name"
+          required
+        />
+      </div>
+
+      {selectedType === "api" && (
+        <div className="space-y-2">
+          <Label htmlFor="curlRequest">cURL Request</Label>
+          <Textarea
+            id="curlRequest"
+            placeholder="curl -X GET 'https://api.example.com/data' -H 'Authorization: Bearer TOKEN'"
+            value={curlRequest}
+            onChange={(e) => setCurlRequest(e.target.value)}
+            className="h-24"
+            data-testid="textarea-curl-request"
+          />
+          <div className="bg-muted/30 rounded-md p-3 text-sm text-muted-foreground">
+            <p>• Import your cURL request to automatically parse JSON fields</p>
+            <p>• Map response fields to dashboard card data</p>
+            <p>• Configure data transformations and filters</p>
+          </div>
+        </div>
+      )}
+
+      {selectedType === "scraping" && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="scrapingUrl">Target URL</Label>
+            <Input
+              id="scrapingUrl"
+              type="url"
+              placeholder="https://example.com"
+              data-testid="input-scraping-url"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="scrapingSelectors">CSS Selectors</Label>
+            <Textarea
+              id="scrapingSelectors"
+              placeholder="Enter CSS selectors for elements to extract..."
+              className="h-24"
+              data-testid="textarea-scraping-selectors"
+            />
+          </div>
+        </div>
+      )}
+
+      {selectedType === "database" && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="dbConnectionString">Connection String</Label>
+            <Input
+              id="dbConnectionString"
+              type="text"
+              placeholder="postgresql://user:password@host:port/database"
+              data-testid="input-db-connection"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dbQuery">SQL Query</Label>
+            <Textarea
+              id="dbQuery"
+              placeholder="SELECT * FROM table_name WHERE condition;"
+              className="h-24"
+              data-testid="textarea-db-query"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex space-x-3 pt-4 border-t border-border">
+        <Button 
+          type="button" 
+          variant="outline" 
+          className="flex-1"
+          onClick={onCancel}
+          data-testid="button-cancel-data-source"
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          className="flex-1"
+          disabled={createMutation.isPending || updateMutation.isPending}
+          data-testid="button-submit-data-source"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          {dataSource ? "Update" : "Create"} Data Source
+        </Button>
+      </div>
+    </form>
+  );
+}

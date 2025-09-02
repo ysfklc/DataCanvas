@@ -1,0 +1,69 @@
+import { Switch, Route } from "wouter";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { Sidebar } from "@/components/layout/sidebar";
+import { useState } from "react";
+import DashboardPage from "@/pages/dashboard";
+import DataSourcesPage from "@/pages/data-sources";
+import UsersPage from "@/pages/users";
+import SettingsPage from "@/pages/settings";
+import LoginPage from "@/pages/login";
+import NotFound from "@/pages/not-found";
+
+function AppLayout({ children }: { children: React.ReactNode }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
+
+  const handleSidebarToggle = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const handleSidebarClose = () => {
+    setIsSidebarOpen(false);
+  };
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return (
+    <div className="flex h-screen bg-background">
+      <Sidebar isOpen={isSidebarOpen} onClose={handleSidebarClose} />
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/" component={DashboardPage} />
+      <Route path="/data-sources" component={DataSourcesPage} />
+      <Route path="/users" component={UsersPage} />
+      <Route path="/settings" component={SettingsPage} />
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <AppLayout>
+            <Router />
+          </AppLayout>
+          <Toaster />
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;

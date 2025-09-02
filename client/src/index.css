@@ -1,0 +1,351 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(222, 84%, 4.9%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(222, 84%, 4.9%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(222, 84%, 4.9%);
+  --primary: hsl(221, 83%, 53%);
+  --primary-foreground: hsl(210, 40%, 98%);
+  --secondary: hsl(210, 40%, 96%);
+  --secondary-foreground: hsl(222, 47%, 11%);
+  --muted: hsl(210, 40%, 96%);
+  --muted-foreground: hsl(215, 16%, 46%);
+  --accent: hsl(210, 40%, 96%);
+  --accent-foreground: hsl(222, 47%, 11%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --border: hsl(214, 32%, 91%);
+  --input: hsl(214, 32%, 91%);
+  --ring: hsl(221, 83%, 53%);
+  --chart-1: hsl(12, 76%, 61%);
+  --chart-2: hsl(173, 58%, 39%);
+  --chart-3: hsl(197, 37%, 24%);
+  --chart-4: hsl(43, 74%, 66%);
+  --chart-5: hsl(27, 87%, 67%);
+  --sidebar: hsl(0, 0%, 100%);
+  --sidebar-foreground: hsl(222, 84%, 4.9%);
+  --sidebar-primary: hsl(221, 83%, 53%);
+  --sidebar-primary-foreground: hsl(210, 40%, 98%);
+  --sidebar-accent: hsl(210, 40%, 96%);
+  --sidebar-accent-foreground: hsl(222, 47%, 11%);
+  --sidebar-border: hsl(214, 32%, 91%);
+  --sidebar-ring: hsl(221, 83%, 53%);
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: Menlo, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00);
+  --shadow-xs: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00);
+  --shadow-sm: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 1px 2px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 1px 2px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-md: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 2px 4px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-lg: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 4px 6px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-xl: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 8px 10px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-2xl: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+}
+
+.dark {
+  --background: hsl(222, 84%, 4.9%);
+  --foreground: hsl(210, 40%, 98%);
+  --card: hsl(222, 84%, 4.9%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --popover: hsl(222, 84%, 4.9%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --primary: hsl(217, 91%, 60%);
+  --primary-foreground: hsl(222, 47%, 11%);
+  --secondary: hsl(217, 32%, 17%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  --muted: hsl(217, 32%, 17%);
+  --muted-foreground: hsl(215, 20%, 65%);
+  --accent: hsl(217, 32%, 17%);
+  --accent-foreground: hsl(210, 40%, 98%);
+  --destructive: hsl(0, 62%, 30%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --border: hsl(217, 32%, 17%);
+  --input: hsl(217, 32%, 17%);
+  --ring: hsl(224, 71%, 4%);
+  --chart-1: hsl(220, 70%, 50%);
+  --chart-2: hsl(160, 60%, 45%);
+  --chart-3: hsl(30, 80%, 55%);
+  --chart-4: hsl(280, 65%, 60%);
+  --chart-5: hsl(340, 75%, 55%);
+  --sidebar: hsl(222, 84%, 4.9%);
+  --sidebar-foreground: hsl(210, 40%, 98%);
+  --sidebar-primary: hsl(221, 83%, 53%);
+  --sidebar-primary-foreground: hsl(210, 40%, 98%);
+  --sidebar-accent: hsl(217, 32%, 17%);
+  --sidebar-accent-foreground: hsl(210, 40%, 98%);
+  --sidebar-border: hsl(217, 32%, 17%);
+  --sidebar-ring: hsl(221, 83%, 53%);
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: Menlo, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00);
+  --shadow-xs: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00);
+  --shadow-sm: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 1px 2px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 1px 2px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-md: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 2px 4px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-lg: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 4px 6px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-xl: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00), 0px 8px 10px -1px hsl(221, 83%, 53%, 0.00);
+  --shadow-2xl: 0px 2px 0px 0px hsl(221, 83%, 53%, 0.00);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: Inter, system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+  }
+}
+
+/* Dashboard Canvas Styling */
+.dashboard-canvas {
+  background-image: radial-gradient(circle, hsl(var(--muted)) 1px, transparent 1px);
+  background-size: 20px 20px;
+  position: relative;
+  min-height: 600px;
+}
+
+/* Draggable Card Styling */
+.draggable-card {
+  cursor: move;
+  transition: all 0.2s ease;
+}
+
+.draggable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dark .draggable-card:hover {
+  box-shadow: 0 10px 25px -5px rgba(255, 255, 255, 0.1), 0 10px 10px -5px rgba(255, 255, 255, 0.04);
+}
+
+/* Chart Container */
+.chart-container {
+  position: relative;
+  height: 200px;
+  width: 100%;
+}
+
+/* Sidebar Navigation */
+.sidebar-nav {
+  transition: transform 0.3s ease-in-out;
+}
+
+@media (max-width: 768px) {
+  .sidebar-nav.closed {
+    transform: translateX(-100%);
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Utility classes for animations */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInFromLeft 0.3s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse 2s infinite;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+}
+
+.dark .card-hover:hover {
+  box-shadow: 0 4px 12px -2px rgba(255, 255, 255, 0.1);
+}
+
+/* Status indicator styles */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.8;
+}
+
+/* Form focus styles */
+.form-input {
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  ring: 2px;
+  ring-color: hsl(var(--ring));
+  border-color: hsl(var(--ring));
+}
+
+/* Button styles */
+.btn-primary {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.btn-secondary {
+  background-color: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: hsl(var(--secondary) / 0.8);
+}
+
+/* Loading spinner */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Data visualization styles */
+.chart-tooltip {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 0.5rem;
+  color: hsl(var(--card-foreground));
+}
+
+/* Error state styles */
+.error-state {
+  color: hsl(var(--destructive));
+  background-color: hsl(var(--destructive) / 0.1);
+  border: 1px solid hsl(var(--destructive) / 0.2);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+/* Success state styles */
+.success-state {
+  color: hsl(var(--chart-2));
+  background-color: hsl(var(--chart-2) / 0.1);
+  border: 1px solid hsl(var(--chart-2) / 0.2);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+/* Dark mode specific adjustments */
+.dark .dashboard-canvas {
+  background-image: radial-gradient(circle, hsl(var(--muted) / 0.5) 1px, transparent 1px);
+}
+
+/* Responsive design helpers */
+@media (max-width: 640px) {
+  .dashboard-canvas {
+    background-size: 15px 15px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .sidebar-nav,
+  .no-print {
+    display: none !important;
+  }
+  
+  .dashboard-canvas {
+    background: none !important;
+  }
+}
