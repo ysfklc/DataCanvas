@@ -71,10 +71,25 @@ export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
     console.log("Saving dashboard...");
   };
 
-  const handleCardPositionChange = useCallback((cardId: string, position: { x: number; y: number }) => {
-    // TODO: Update card position in the backend
-    console.log("Card position changed:", cardId, position);
-  }, []);
+  const updateCardMutation = useMutation({
+    mutationFn: ({ cardId, updates }: { cardId: string; updates: any }) =>
+      apiRequest("PUT", `/api/dashboards/${dashboard.id}/cards/${cardId}`, updates),
+    onError: () => {
+      toast({
+        title: "Failed to update card",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCardPositionChange = useCallback((cardId: string, position: { x: number; y: number }, size?: { width: number; height: number }) => {
+    const updates: any = { position };
+    if (size) {
+      updates.size = size;
+    }
+    updateCardMutation.mutate({ cardId, updates });
+  }, [dashboard.id, updateCardMutation]);
 
   const handleCreateCard = (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,7 +193,7 @@ export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
       </div>
 
       <Dialog open={isAddCardDialogOpen} onOpenChange={setIsAddCardDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Dashboard Card</DialogTitle>
           </DialogHeader>
@@ -212,9 +227,9 @@ export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
               </Select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Visualization Type</Label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {visualizationTypes.map((type) => {
                   const IconComponent = type.icon;
                   return (
@@ -222,14 +237,14 @@ export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
                       key={type.id}
                       type="button"
                       variant={selectedVisualizationType === type.id ? "default" : "outline"}
-                      className="h-auto p-3 flex flex-col items-center space-y-2"
+                      className="h-auto p-4 flex flex-col sm:flex-col items-center justify-center space-y-2 min-h-[80px] text-left"
                       onClick={() => setSelectedVisualizationType(type.id)}
                       data-testid={`button-visualization-${type.id}`}
                     >
-                      <IconComponent className="w-6 h-6" />
-                      <div className="text-center">
-                        <div className="text-sm font-medium">{type.name}</div>
-                        <div className="text-xs text-muted-foreground">{type.description}</div>
+                      <IconComponent className="w-6 h-6 flex-shrink-0" />
+                      <div className="text-center w-full">
+                        <div className="text-sm font-medium leading-tight">{type.name}</div>
+                        <div className="text-xs text-muted-foreground leading-tight mt-1 overflow-hidden">{type.description}</div>
                       </div>
                     </Button>
                   );
@@ -237,7 +252,7 @@ export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
               </div>
             </div>
             
-            <div className="flex space-x-3 pt-4">
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4">
               <Button 
                 type="button" 
                 variant="outline" 

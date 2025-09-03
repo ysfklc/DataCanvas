@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChartRenderer } from "@/components/charts/chart-renderer";
@@ -8,24 +8,32 @@ import type { DashboardCard as DashboardCardType } from "@shared/schema";
 
 interface DashboardCardProps {
   card: DashboardCardType;
-  onPositionChange: (cardId: string, position: { x: number; y: number }) => void;
+  onPositionChange: (cardId: string, position: { x: number; y: number }, size?: { width: number; height: number }) => void;
 }
 
 export function DashboardCard({ card, onPositionChange }: DashboardCardProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [position, setPosition] = useState(card.position as { x: number; y: number });
   const [size, setSize] = useState(card.size as { width: number; height: number });
   const dragRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const resizeStart = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.target === dragRef.current || dragRef.current?.contains(e.target as Node)) {
-      setIsDragging(true);
-      dragStart.current = {
-        x: e.clientX - position.x,
-        y: e.clientY - position.y,
-      };
+    const target = e.target as HTMLElement;
+    
+    // Don't start dragging if clicking on buttons or resize handles
+    if (target.closest('button') || target.classList.contains('resize-handle')) {
+      return;
     }
+    
+    e.preventDefault();
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    };
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -46,23 +54,61 @@ export function DashboardCard({ card, onPositionChange }: DashboardCardProps) {
       setIsDragging(false);
       onPositionChange(card.id, position);
     }
+    if (isResizing) {
+      setIsResizing(false);
+      onPositionChange(card.id, position, size);
+    }
   };
 
-  // Add global mouse event listeners when dragging
-  useState(() => {
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    } else {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+  // Add resize functionality
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    resizeStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      width: size.width,
+      height: size.height,
     };
-  });
+  };
+
+  const handleResizeMove = (e: MouseEvent) => {
+    if (isResizing && resizeStart.current) {
+      const deltaX = e.clientX - resizeStart.current.x;
+      const deltaY = e.clientY - resizeStart.current.y;
+      
+      const newWidth = Math.max(200, resizeStart.current.width + deltaX);
+      const newHeight = Math.max(150, resizeStart.current.height + deltaY);
+      
+      // Snap to 20px grid
+      const snappedWidth = Math.round(newWidth / 20) * 20;
+      const snappedHeight = Math.round(newHeight / 20) * 20;
+      
+      setSize({ width: snappedWidth, height: snappedHeight });
+    }
+  };
+
+  // Add global mouse event listeners when dragging or resizing
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      if (isDragging) {
+        handleMouseMove(e);
+      } else if (isResizing) {
+        handleResizeMove(e);
+      }
+    };
+
+    if (isDragging || isResizing) {
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      
+      return () => {
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+    }
+  }, [isDragging, isResizing, position, size]);
 
   const handleRefresh = () => {
     // TODO: Refresh card data
@@ -138,6 +184,15 @@ export function DashboardCard({ card, onPositionChange }: DashboardCardProps) {
           />
         </div>
       </div>
+      
+      {/* Resize handle */}
+      <div
+        className="resize-handle absolute bottom-0 right-0 w-4 h-4 bg-muted-foreground/20 hover:bg-muted-foreground/40 cursor-se-resize"
+        style={{
+          clipPath: 'polygon(100% 0%, 0% 100%, 100% 100%)'
+        }}
+        onMouseDown={handleResizeStart}
+      />
     </div>
   );
 }
