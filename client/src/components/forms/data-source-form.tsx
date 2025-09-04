@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Link, Globe, Database, Plus } from "lucide-react";
+import { Link, Globe, Database, Plus, PlayCircle, CheckCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,9 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
   const [selectedType, setSelectedType] = useState(dataSource?.type || "");
   const [name, setName] = useState(dataSource?.name || "");
   const [curlRequest, setCurlRequest] = useState("");
+  const [isTestingDataSource, setIsTestingDataSource] = useState(false);
+  const [testResults, setTestResults] = useState<any>(null);
+  const [testError, setTestError] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -67,6 +70,53 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
       });
     },
   });
+
+  const handleTestDataSource = async () => {
+    if (!selectedType) {
+      toast({
+        title: "Please select a data source type",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedType === "api" && !curlRequest.trim()) {
+      toast({
+        title: "Please enter a cURL request to test",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsTestingDataSource(true);
+    setTestResults(null);
+    setTestError(null);
+
+    try {
+      const testData = {
+        type: selectedType,
+        config: selectedType === "api" ? { curlRequest } : {},
+      };
+
+      const response = await apiRequest("POST", "/api/data-sources/test", testData);
+      setTestResults(response);
+      
+      toast({
+        title: "Test successful",
+        description: "Data source connection tested successfully!",
+      });
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to test data source";
+      setTestError(errorMessage);
+      toast({
+        title: "Test failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsTestingDataSource(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +202,20 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
             <p>• Map response fields to dashboard card data</p>
             <p>• Configure data transformations and filters</p>
           </div>
+          
+          {curlRequest.trim() && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleTestDataSource}
+              disabled={isTestingDataSource}
+              className="w-full"
+              data-testid="button-test-data-source"
+            >
+              <PlayCircle className="w-4 h-4 mr-2" />
+              {isTestingDataSource ? "Testing..." : "Test Data Source"}
+            </Button>
+          )}
         </div>
       )}
 
@@ -198,6 +262,76 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
               data-testid="textarea-db-query"
             />
           </div>
+        </div>
+      )}
+
+      {/* Test Results Display */}
+      {(testResults || testError) && (
+        <div className="space-y-4 p-4 border border-border rounded-lg bg-muted/20">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-foreground flex items-center">
+              {testError ? (
+                <AlertCircle className="w-5 h-5 text-destructive mr-2" />
+              ) : (
+                <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+              )}
+              Test Results
+            </h3>
+          </div>
+
+          {testError && (
+            <div className="p-3 bg-destructive/10 rounded border border-destructive/20">
+              <p className="text-sm text-destructive font-medium">Error:</p>
+              <p className="text-sm text-destructive/80 mt-1">{testError}</p>
+            </div>
+          )}
+
+          {testResults && (
+            <div className="space-y-3">
+              {/* Raw Response */}
+              <div>
+                <p className="text-sm font-medium text-foreground mb-2">Response:</p>
+                <div className="p-3 bg-background rounded border border-border">
+                  <pre className="text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap">
+                    {JSON.stringify(testResults.response, null, 2)}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Parsed Fields */}
+              {testResults.fields && testResults.fields.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-2">
+                    Available Fields ({testResults.fields.length}):
+                  </p>
+                  <div className="p-3 bg-background rounded border border-border">
+                    <div className="flex flex-wrap gap-2">
+                      {testResults.fields.map((field: string, index: number) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 bg-primary/10 text-primary text-xs rounded-md"
+                        >
+                          {field}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* JSON Structure */}
+              {testResults.structure && (
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-2">JSON Structure:</p>
+                  <div className="p-3 bg-background rounded border border-border">
+                    <pre className="text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap">
+                      {JSON.stringify(testResults.structure, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

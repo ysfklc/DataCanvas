@@ -14,9 +14,10 @@ import type { Dashboard, DashboardCard as DashboardCardType, DataSource } from "
 interface DashboardCanvasProps {
   dashboard: Dashboard;
   onBack: () => void;
+  isPublic?: boolean;
 }
 
-export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
+export function DashboardCanvas({ dashboard, onBack, isPublic = false }: DashboardCanvasProps) {
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [cardTitle, setCardTitle] = useState("");
   const [selectedDataSource, setSelectedDataSource] = useState("");
@@ -66,14 +67,40 @@ export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
     setIsAddCardDialogOpen(true);
   };
 
+  const saveDashboardMutation = useMutation({
+    mutationFn: (updates: any) =>
+      apiRequest("PUT", `/api/dashboards/${dashboard.id}`, updates),
+    onSuccess: () => {
+      toast({
+        title: "Dashboard saved",
+        description: "Your dashboard has been saved successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to save dashboard",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSaveDashboard = () => {
-    // TODO: Implement save functionality
-    console.log("Saving dashboard...");
+    saveDashboardMutation.mutate({
+      name: dashboard.name,
+      description: dashboard.description,
+      isPublic: dashboard.isPublic,
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const updateCardMutation = useMutation({
     mutationFn: ({ cardId, updates }: { cardId: string; updates: any }) =>
-      apiRequest("PUT", `/api/dashboards/${dashboard.id}/cards/${cardId}`, updates),
+      apiRequest("PUT", `/api/cards/${cardId}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboards", dashboard.id, "cards"] });
+    },
     onError: () => {
       toast({
         title: "Failed to update card",
@@ -119,43 +146,46 @@ export function DashboardCanvas({ dashboard, onBack }: DashboardCanvasProps) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="bg-card border-b border-border p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onBack}
-              className="text-muted-foreground hover:text-foreground"
-              data-testid="button-back-to-dashboards"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <h3 className="text-xl font-semibold text-foreground" data-testid="text-dashboard-name">
-              {dashboard.name}
-            </h3>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button 
-              variant="secondary" 
-              size="sm"
-              onClick={handleAddCard}
-              data-testid="button-add-card"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Card
-            </Button>
-            <Button 
-              size="sm"
-              onClick={handleSaveDashboard}
-              data-testid="button-save-dashboard"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save
-            </Button>
+      {!isPublic && (
+        <div className="bg-card border-b border-border p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onBack}
+                className="text-muted-foreground hover:text-foreground"
+                data-testid="button-back-to-dashboards"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <h3 className="text-xl font-semibold text-foreground" data-testid="text-dashboard-name">
+                {dashboard.name}
+              </h3>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="secondary" 
+                size="sm"
+                onClick={handleAddCard}
+                data-testid="button-add-card"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Card
+              </Button>
+              <Button 
+                size="sm"
+                onClick={handleSaveDashboard}
+                disabled={saveDashboardMutation.isPending}
+                data-testid="button-save-dashboard"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {saveDashboardMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div 
         ref={canvasRef}

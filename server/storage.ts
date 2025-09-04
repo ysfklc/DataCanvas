@@ -23,6 +23,7 @@ export interface IStorage {
   getDashboard(id: string): Promise<Dashboard | undefined>;
   getDashboardsByUser(userId: string): Promise<Dashboard[]>;
   getAllDashboards(): Promise<Dashboard[]>;
+  getPublicDashboards(): Promise<Dashboard[]>;
   createDashboard(dashboard: InsertDashboard): Promise<Dashboard>;
   updateDashboard(id: string, dashboard: Partial<InsertDashboard>): Promise<Dashboard>;
   deleteDashboard(id: string): Promise<void>;
@@ -94,6 +95,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllDashboards(): Promise<Dashboard[]> {
     return await db.select().from(dashboards);
+  }
+
+  async getPublicDashboards(): Promise<Dashboard[]> {
+    return await db.select().from(dashboards).where(eq(dashboards.isPublic, true));
   }
 
   async createDashboard(insertDashboard: InsertDashboard): Promise<Dashboard> {

@@ -13,6 +13,7 @@ import SettingsPage from "@/pages/settings";
 import LoginPage from "@/pages/login";
 import NotFound from "@/pages/not-found";
 import PublicDashboardPage from "@/pages/public-dashboard";
+import PublicDashboardsPage from "@/pages/public-dashboards";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -58,6 +59,7 @@ function App() {
       <AuthProvider>
         <TooltipProvider>
           <Switch>
+            <Route path="/public/dashboards" component={PublicDashboardsPage} />
             <Route path="/public/dashboard/:id" component={PublicDashboardPage} />
             <Route>
               <AppLayout>

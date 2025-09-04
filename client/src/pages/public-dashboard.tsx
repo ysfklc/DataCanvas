@@ -54,7 +54,7 @@ export default function PublicDashboardPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-between p-4">
+        <div className="flex items-center p-4">
           <div className="flex items-center space-x-4">
             <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
               <BarChart3 className="text-primary w-5 h-5" />
@@ -66,16 +66,13 @@ export default function PublicDashboardPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Shield className="w-4 h-4" />
-            <span>Public Dashboard</span>
-          </div>
         </div>
       </header>
       
       <DashboardCanvas 
         dashboard={dashboard as Dashboard}
         onBack={() => {}}
+        isPublic={true}
       />
     </div>
   );

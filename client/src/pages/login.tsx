@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BarChart3, Building } from "lucide-react";
+import { BarChart3, Building, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -107,7 +107,7 @@ export default function Login() {
           </form>
 
           <div className="mt-6 pt-6 border-t border-border">
-            <div className="text-center">
+            <div className="text-center space-y-3">
               <p className="text-sm text-muted-foreground mb-3">Or sign in with</p>
               <Button 
                 variant="secondary" 
@@ -117,6 +117,20 @@ export default function Login() {
                 <Building className="w-4 h-4 mr-2" />
                 LDAP Authentication
               </Button>
+              
+              <div className="pt-3">
+                <p className="text-sm text-muted-foreground mb-3">Or browse without signing in</p>
+                <Link href="/public/dashboards">
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    data-testid="button-view-public"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Public Dashboards
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
 

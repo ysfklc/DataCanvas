@@ -175,6 +175,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // List all public dashboards
+  app.get("/api/public/dashboards", async (req, res) => {
+    try {
+      const dashboards = await storage.getPublicDashboards();
+      res.json(dashboards);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch public dashboards" });
+    }
+  });
+
   // Public dashboard access route
   app.get("/api/public/dashboards/:id", async (req, res) => {
     try {
@@ -279,6 +289,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(dataSources);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch data sources" });
+    }
+  });
+
+  // Test data source endpoint
+  app.post("/api/data-sources/test", requireAuth, async (req, res) => {
+    try {
+      const { type, config } = req.body;
+      
+      if (type === "api" && config.curlRequest) {
+        // Parse cURL command to extract URL and headers
+        const curlRequest = config.curlRequest.trim();
+        const urlMatch = curlRequest.match(/'([^']+)'|"([^"]+)"|(\S+)/g);
+        let url = '';
+        const headers: Record<string, string> = {};
+        
+        // Find URL and headers from cURL command
+        for (let i = 0; i < urlMatch?.length; i++) {
+          const part = urlMatch[i].replace(/['"]/g, '');
+          if (part.startsWith('http')) {
+            url = part;
+          } else if (part === '-H' && i + 1 < urlMatch.length) {
+            const header = urlMatch[i + 1].replace(/['"]/g, '');
+            const [key, ...valueParts] = header.split(':');
+            if (key && valueParts.length > 0) {
+              headers[key.trim()] = valueParts.join(':').trim();
+            }
+          }
+        }
+        
+        if (!url) {
+          return res.status(400).json({ message: "Could not parse URL from cURL request" });
+        }
+        
+        // Make the API request
+        const response = await fetch(url, {
+          method: 'GET',
+          headers,
+        });
+        
+        const responseText = await response.text();
+        let parsedResponse;
+        
+        try {
+          parsedResponse = JSON.parse(responseText);
+        } catch {
+          parsedResponse = { raw: responseText };
+        }
+        
+        // Extract fields from JSON response
+        const extractFields = (obj: any, prefix = ''): string[] => {
+          let fields: string[] = [];
+          if (typeof obj === 'object' && obj !== null) {
+            if (Array.isArray(obj)) {
+              if (obj.length > 0) {
+                fields = fields.concat(extractFields(obj[0], prefix));
+              }
+            } else {
+              Object.keys(obj).forEach(key => {
+                const fieldName = prefix ? `${prefix}.${key}` : key;
+                fields.push(fieldName);
+                if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                  fields = fields.concat(extractFields(obj[key], fieldName));
+                }
+              });
+            }
+          }
+          return fields;
+        };
+        
+        const fields = extractFields(parsedResponse);
+        
+        // Create structure overview
+        const createStructure = (obj: any): any => {
+          if (typeof obj !== 'object' || obj === null) {
+            return typeof obj;
+          }
+          if (Array.isArray(obj)) {
+            return obj.length > 0 ? [createStructure(obj[0])] : [];
+          }
+          const structure: any = {};
+          Object.keys(obj).forEach(key => {
+            structure[key] = createStructure(obj[key]);
+          });
+          return structure;
+        };
+        
+        const structure = createStructure(parsedResponse);
+        
+        res.json({
+          success: true,
+          response: parsedResponse,
+          fields,
+          structure,
+          url,
+          headers: Object.keys(headers)
+        });
+      } else {
+        res.status(400).json({ message: "Unsupported data source type for testing" });
+      }
+    } catch (error: any) {
+      console.error("Data source test error:", error);
+      res.status(500).json({ message: error.message || "Failed to test data source" });
     }
   });
 
