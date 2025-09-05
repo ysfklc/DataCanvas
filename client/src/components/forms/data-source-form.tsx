@@ -288,6 +288,24 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
 
           {testResults && (
             <div className="space-y-3">
+              {/* Status Code */}
+              {testResults.statusCode && (
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-2">HTTP Status:</p>
+                  <div className="p-3 bg-background rounded border border-border">
+                    <span className={`inline-flex items-center px-2 py-1 text-xs rounded-md ${
+                      testResults.statusCode >= 200 && testResults.statusCode < 300 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                        : testResults.statusCode >= 400
+                        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'  
+                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                    }`}>
+                      {testResults.statusCode}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
               {/* Raw Response */}
               <div>
                 <p className="text-sm font-medium text-foreground mb-2">Response:</p>

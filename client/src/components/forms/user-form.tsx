@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { UserPlus, Save, Search, UserIcon } from "lucide-react";
+import { UserPlus, Save, Search, UserIcon, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
@@ -28,6 +28,13 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const [ldapSearchUsername, setLdapSearchUsername] = useState("");
   const [ldapSearchStatus, setLdapSearchStatus] = useState<'idle' | 'searching' | 'found' | 'not-found'>('idle');
   const [ldapUserInfo, setLdapUserInfo] = useState<any>(null);
+  
+  // Check if LDAP is enabled
+  const { data: settings = [] } = useQuery({
+    queryKey: ["/api/settings"],
+  });
+  
+  const ldapEnabled = (settings as any[]).find((s: any) => s.key === "ldap_enabled")?.value || false;
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -210,19 +217,44 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
       <div className="space-y-2">
         <Label htmlFor="authMethod">Authentication Method</Label>
-        <Select value={authMethod} onValueChange={setAuthMethod}>
+        <Select value={authMethod} onValueChange={(value) => {
+          if (value === "ldap" && !ldapEnabled) {
+            toast({
+              title: "LDAP Disabled",
+              description: "LDAP authentication is currently disabled. Please enable it in system settings.",
+              variant: "destructive",
+            });
+            return;
+          }
+          setAuthMethod(value);
+        }}>
           <SelectTrigger data-testid="select-auth-method">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="local">Local</SelectItem>
-            <SelectItem value="ldap">LDAP</SelectItem>
+            <SelectItem value="ldap" disabled={!ldapEnabled}>
+              LDAP {!ldapEnabled ? "(Disabled)" : ""}
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* LDAP User Search */}
-      {authMethod === "ldap" && !user && (
+      {/* LDAP Not Enabled Warning */}
+      {authMethod === "ldap" && !ldapEnabled && (
+        <div className="space-y-4 border border-destructive/50 bg-destructive/10 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-destructive" />
+            <Label className="text-sm font-medium text-destructive">LDAP Authentication Disabled</Label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            LDAP authentication is currently disabled in system settings. Please enable LDAP configuration to use LDAP authentication.
+          </p>
+        </div>
+      )}
+      
+      {authMethod === "ldap" && !user && ldapEnabled && (
         <div className="space-y-4 border border-border rounded-lg p-4">
           <div className="flex items-center space-x-2">
             <UserIcon className="w-4 h-4 text-primary" />
@@ -243,7 +275,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
               type="button"
               variant="outline"
               onClick={handleLdapSearch}
-              disabled={searchLdapMutation.isPending}
+              disabled={!ldapEnabled || searchLdapMutation.isPending}
               data-testid="button-ldap-search"
             >
               <Search className="w-4 h-4 mr-2" />
