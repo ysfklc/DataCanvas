@@ -4,14 +4,18 @@ import { Button } from "@/components/ui/button";
 import { ChartRenderer } from "@/components/charts/chart-renderer";
 import { Settings, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { DashboardCard as DashboardCardType } from "@shared/schema";
 
 interface DashboardCardProps {
   card: DashboardCardType;
   onPositionChange: (cardId: string, position: { x: number; y: number }, size?: { width: number; height: number }) => void;
+  onEdit?: (card: DashboardCardType) => void;
 }
 
-export function DashboardCard({ card, onPositionChange }: DashboardCardProps) {
+export function DashboardCard({ card, onPositionChange, onEdit }: DashboardCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [position, setPosition] = useState(card.position as { x: number; y: number });
@@ -19,6 +23,8 @@ export function DashboardCard({ card, onPositionChange }: DashboardCardProps) {
   const dragRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const resizeStart = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -110,19 +116,43 @@ export function DashboardCard({ card, onPositionChange }: DashboardCardProps) {
     }
   }, [isDragging, isResizing, position, size]);
 
+  const deleteCardMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/cards/${card.id}`),
+    onSuccess: () => {
+      toast({
+        title: "Card deleted",
+        description: "Dashboard card has been deleted successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboards", card.dashboardId, "cards"] });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to delete card",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleRefresh = () => {
-    // TODO: Refresh card data
-    console.log("Refreshing card:", card.id);
+    // Refresh chart data by invalidating queries
+    queryClient.invalidateQueries({ queryKey: ["/api/data-sources", card.dataSourceId, "data"] });
+    toast({
+      title: "Card refreshed",
+      description: "Dashboard card data has been refreshed.",
+    });
   };
 
   const handleEdit = () => {
-    // TODO: Open card edit dialog
-    console.log("Editing card:", card.id);
+    if (onEdit) {
+      onEdit(card);
+    }
   };
 
   const handleDelete = () => {
-    // TODO: Delete card
-    console.log("Deleting card:", card.id);
+    if (confirm("Are you sure you want to delete this card?")) {
+      deleteCardMutation.mutate();
+    }
   };
 
   return (

@@ -137,6 +137,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Deactivate all LDAP users
+  app.post("/api/users/deactivate-ldap", requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const ldapUsers = users.filter(user => user.authMethod === "ldap");
+      
+      // Deactivate all LDAP users
+      for (const user of ldapUsers) {
+        await storage.updateUser(user.id, { isActive: false });
+      }
+      
+      res.json({ 
+        message: "LDAP users deactivated successfully",
+        deactivatedCount: ldapUsers.length 
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to deactivate LDAP users" });
+    }
+  });
+
   // Dashboard routes
   app.get("/api/dashboards", requireAuth, async (req, res) => {
     try {

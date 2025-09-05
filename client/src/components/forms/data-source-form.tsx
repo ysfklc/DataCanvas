@@ -26,7 +26,7 @@ const dataSourceTypes = [
 export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFormProps) {
   const [selectedType, setSelectedType] = useState(dataSource?.type || "");
   const [name, setName] = useState(dataSource?.name || "");
-  const [curlRequest, setCurlRequest] = useState("");
+  const [curlRequest, setCurlRequest] = useState((dataSource?.config as any)?.curlRequest || "");
   const [isTestingDataSource, setIsTestingDataSource] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [testError, setTestError] = useState<string | null>(null);
@@ -99,7 +99,8 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
       };
 
       const response = await apiRequest("POST", "/api/data-sources/test", testData);
-      setTestResults(response);
+      const responseData = await response.json();
+      setTestResults(responseData);
       
       toast({
         title: "Test successful",
@@ -309,8 +310,8 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
               {/* Raw Response */}
               <div>
                 <p className="text-sm font-medium text-foreground mb-2">Response:</p>
-                <div className="p-3 bg-background rounded border border-border">
-                  <pre className="text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap">
+                <div className="p-3 bg-background rounded border border-border max-h-64 overflow-auto">
+                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
                     {JSON.stringify(testResults.response, null, 2)}
                   </pre>
                 </div>
@@ -341,8 +342,8 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
               {testResults.structure && (
                 <div>
                   <p className="text-sm font-medium text-foreground mb-2">JSON Structure:</p>
-                  <div className="p-3 bg-background rounded border border-border">
-                    <pre className="text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap">
+                  <div className="p-3 bg-background rounded border border-border max-h-64 overflow-auto">
+                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
                       {JSON.stringify(testResults.structure, null, 2)}
                     </pre>
                   </div>

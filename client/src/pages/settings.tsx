@@ -158,14 +158,27 @@ export default function SettingsPage() {
 
   const handleSaveLdap = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // If LDAP is disabled, only save the disabled state
     if (!ldapEnabled) {
-      toast({
-        title: "LDAP Disabled",
-        description: "Please enable LDAP configuration before saving.",
-        variant: "destructive",
-      });
+      apiRequest("POST", "/api/settings", { key: "ldap_enabled", value: false })
+        .then(() => {
+          toast({
+            title: "LDAP settings saved",
+            description: "LDAP authentication has been disabled.",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+        })
+        .catch(() => {
+          toast({
+            title: "Failed to save LDAP settings",
+            description: "Please try again.",
+            variant: "destructive",
+          });
+        });
       return;
     }
+    
     if (ldapTestStatus !== 'success') {
       toast({
         title: "Test Required",
@@ -211,7 +224,41 @@ export default function SettingsPage() {
                   </div>
                   <Switch
                     checked={ldapEnabled}
-                    onCheckedChange={setLdapEnabled}
+                    onCheckedChange={async (enabled) => {
+                      setLdapEnabled(enabled);
+                      // Automatically save when toggled
+                      try {
+                        await apiRequest("POST", "/api/settings", { 
+                          key: "ldap_enabled", 
+                          value: enabled 
+                        });
+                        
+                        if (!enabled) {
+                          // Deactivate LDAP users when disabling LDAP
+                          await apiRequest("POST", "/api/users/deactivate-ldap");
+                          toast({
+                            title: "LDAP disabled",
+                            description: "LDAP authentication has been disabled and LDAP users have been deactivated.",
+                          });
+                        } else {
+                          toast({
+                            title: "LDAP enabled",
+                            description: "LDAP authentication has been enabled.",
+                          });
+                        }
+                        
+                        queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+                      } catch (error) {
+                        // Revert the toggle if save fails
+                        setLdapEnabled(!enabled);
+                        toast({
+                          title: "Failed to update LDAP settings",
+                          description: "Please try again.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
                     data-testid="switch-ldap-enabled"
                   />
                 </div>

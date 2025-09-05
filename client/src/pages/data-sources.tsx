@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/top-bar";
 import { DataSourceForm } from "@/components/forms/data-source-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Link, Database, Globe, Play, Edit, Trash2 } from "lucide-react";
+import { Link, Database, Globe, Play, Square, Edit, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { DataSource } from "@shared/schema";
 
 const dataSourceIcons = {
@@ -18,9 +20,48 @@ export default function DataSourcesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedDataSource, setSelectedDataSource] = useState<DataSource | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: dataSources = [], isLoading } = useQuery({
     queryKey: ["/api/data-sources"],
+  });
+
+  const toggleDataSourceMutation = useMutation({
+    mutationFn: (data: { id: string; isActive: boolean }) => 
+      apiRequest("PUT", `/api/data-sources/${data.id}`, { isActive: data.isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/data-sources"] });
+      toast({
+        title: "Data source updated",
+        description: "Status changed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to update data source",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteDataSourceMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/data-sources/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/data-sources"] });
+      toast({
+        title: "Data source deleted",
+        description: "Data source has been removed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to delete data source",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleCreateDataSource = () => {
@@ -30,6 +71,19 @@ export default function DataSourcesPage() {
   const handleEditDataSource = (dataSource: DataSource) => {
     setSelectedDataSource(dataSource);
     setIsEditDialogOpen(true);
+  };
+
+  const handleToggleDataSource = (dataSource: DataSource) => {
+    toggleDataSourceMutation.mutate({
+      id: dataSource.id,
+      isActive: !dataSource.isActive,
+    });
+  };
+
+  const handleDeleteDataSource = (dataSource: DataSource) => {
+    if (window.confirm(`Are you sure you want to delete "${dataSource.name}"?`)) {
+      deleteDataSourceMutation.mutate(dataSource.id);
+    }
   };
 
   const getStatusColor = (isActive: boolean) => {
@@ -96,10 +150,21 @@ export default function DataSourcesPage() {
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="text-muted-foreground hover:text-foreground p-1"
-                          data-testid={`button-test-data-source-${dataSource.id}`}
+                          className={`p-1 ${
+                            dataSource.isActive 
+                              ? "text-chart-2 hover:text-chart-2/80" 
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                          onClick={() => handleToggleDataSource(dataSource)}
+                          disabled={toggleDataSourceMutation.isPending}
+                          title={dataSource.isActive ? "Stop data source" : "Start data source"}
+                          data-testid={`button-toggle-data-source-${dataSource.id}`}
                         >
-                          <Play className="w-4 h-4" />
+                          {dataSource.isActive ? (
+                            <Square className="w-4 h-4" />
+                          ) : (
+                            <Play className="w-4 h-4" />
+                          )}
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -114,6 +179,8 @@ export default function DataSourcesPage() {
                           variant="ghost" 
                           size="sm" 
                           className="text-muted-foreground hover:text-destructive p-1"
+                          onClick={() => handleDeleteDataSource(dataSource)}
+                          disabled={deleteDataSourceMutation.isPending}
                           data-testid={`button-delete-data-source-${dataSource.id}`}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -153,27 +220,31 @@ export default function DataSourcesPage() {
       </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Add Data Source</DialogTitle>
           </DialogHeader>
-          <DataSourceForm 
-            onSuccess={() => setIsCreateDialogOpen(false)}
-            onCancel={() => setIsCreateDialogOpen(false)}
-          />
+          <div className="flex-1 overflow-y-auto pr-2">
+            <DataSourceForm 
+              onSuccess={() => setIsCreateDialogOpen(false)}
+              onCancel={() => setIsCreateDialogOpen(false)}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Data Source</DialogTitle>
           </DialogHeader>
-          <DataSourceForm 
-            dataSource={selectedDataSource}
-            onSuccess={() => setIsEditDialogOpen(false)}
-            onCancel={() => setIsEditDialogOpen(false)}
-          />
+          <div className="flex-1 overflow-y-auto pr-2">
+            <DataSourceForm 
+              dataSource={selectedDataSource}
+              onSuccess={() => setIsEditDialogOpen(false)}
+              onCancel={() => setIsEditDialogOpen(false)}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

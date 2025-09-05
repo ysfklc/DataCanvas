@@ -19,6 +19,8 @@ interface DashboardCanvasProps {
 
 export function DashboardCanvas({ dashboard, onBack, isPublic = false }: DashboardCanvasProps) {
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
+  const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<DashboardCardType | null>(null);
   const [cardTitle, setCardTitle] = useState("");
   const [selectedDataSource, setSelectedDataSource] = useState("");
   const [selectedVisualizationType, setSelectedVisualizationType] = useState("");
@@ -57,6 +59,45 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
     },
   });
 
+  const updateCardMutation = useMutation({
+    mutationFn: ({ cardId, updates }: { cardId: string; updates: any }) =>
+      apiRequest("PUT", `/api/cards/${cardId}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboards", dashboard.id, "cards"] });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to update card",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const editCardMutation = useMutation({
+    mutationFn: (data: any) =>
+      apiRequest("PUT", `/api/cards/${editingCard?.id}`, data),
+    onSuccess: () => {
+      toast({
+        title: "Card updated",
+        description: "Your dashboard card has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboards", dashboard.id, "cards"] });
+      setIsEditCardDialogOpen(false);
+      setCardTitle("");
+      setSelectedDataSource("");
+      setSelectedVisualizationType("");
+      setEditingCard(null);
+    },
+    onError: () => {
+      toast({
+        title: "Failed to update card",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const visualizationTypes = [
     { id: "table", name: "Table", description: "Display data in rows and columns", icon: Table },
     { id: "chart", name: "Bar Chart", description: "Show data as bars", icon: BarChart3 },
@@ -65,6 +106,14 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
 
   const handleAddCard = () => {
     setIsAddCardDialogOpen(true);
+  };
+
+  const handleEditCard = (card: DashboardCardType) => {
+    setEditingCard(card);
+    setCardTitle(card.title);
+    setSelectedDataSource(card.dataSourceId || "");
+    setSelectedVisualizationType(card.visualizationType);
+    setIsEditCardDialogOpen(true);
   };
 
   const saveDashboardMutation = useMutation({
@@ -95,20 +144,6 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
     });
   };
 
-  const updateCardMutation = useMutation({
-    mutationFn: ({ cardId, updates }: { cardId: string; updates: any }) =>
-      apiRequest("PUT", `/api/cards/${cardId}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboards", dashboard.id, "cards"] });
-    },
-    onError: () => {
-      toast({
-        title: "Failed to update card",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
 
   const handleCardPositionChange = useCallback((cardId: string, position: { x: number; y: number }, size?: { width: number; height: number }) => {
     const updates: any = { position };
@@ -140,6 +175,18 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
       visualizationType: selectedVisualizationType,
       position: { x, y },
       size: { width: 300, height: 200 },
+      config: {},
+    });
+  };
+
+  const handleUpdateCard = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cardTitle || !selectedVisualizationType || !editingCard) return;
+
+    editCardMutation.mutate({
+      title: cardTitle,
+      dataSourceId: selectedDataSource === "none" ? null : selectedDataSource,
+      visualizationType: selectedVisualizationType,
       config: {},
     });
   };
@@ -217,6 +264,7 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
               key={card.id}
               card={card}
               onPositionChange={handleCardPositionChange}
+              onEdit={handleEditCard}
             />
           ))
         )}
@@ -300,6 +348,89 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
               >
                 <Plus className="w-4 h-4 mr-2" />
                 {createCardMutation.isPending ? "Creating..." : "Create Card"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditCardDialogOpen} onOpenChange={setIsEditCardDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Dashboard Card</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateCard} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editCardTitle">Card Title</Label>
+              <Input 
+                id="editCardTitle" 
+                placeholder="Sales Overview" 
+                value={cardTitle}
+                onChange={(e) => setCardTitle(e.target.value)}
+                data-testid="input-edit-card-title"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Data Source (Optional)</Label>
+              <Select value={selectedDataSource} onValueChange={setSelectedDataSource}>
+                <SelectTrigger data-testid="select-edit-data-source">
+                  <SelectValue placeholder="Select a data source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No data source</SelectItem>
+                  {(dataSources as DataSource[]).map((dataSource) => (
+                    <SelectItem key={dataSource.id} value={dataSource.id}>
+                      {dataSource.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Visualization Type</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {visualizationTypes.map((type) => {
+                  const IconComponent = type.icon;
+                  return (
+                    <Button
+                      key={type.id}
+                      type="button"
+                      variant={selectedVisualizationType === type.id ? "default" : "outline"}
+                      className="h-auto p-4 flex flex-col sm:flex-col items-center justify-center space-y-2 min-h-[80px] text-left"
+                      onClick={() => setSelectedVisualizationType(type.id)}
+                      data-testid={`button-edit-visualization-${type.id}`}
+                    >
+                      <IconComponent className="w-6 h-6 flex-shrink-0" />
+                      <div className="text-center w-full">
+                        <div className="text-sm font-medium leading-tight">{type.name}</div>
+                        <div className="text-xs text-muted-foreground leading-tight mt-1 overflow-hidden">{type.description}</div>
+                      </div>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => setIsEditCardDialogOpen(false)}
+                data-testid="button-cancel-edit-card"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                className="flex-1"
+                disabled={editCardMutation.isPending}
+                data-testid="button-submit-edit-card"
+              >
+                {editCardMutation.isPending ? "Updating..." : "Update Card"}
               </Button>
             </div>
           </form>
