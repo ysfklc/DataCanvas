@@ -312,6 +312,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/data-sources/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const dataSource = await storage.getDataSource(id);
+      if (!dataSource) {
+        return res.status(404).json({ message: "Data source not found" });
+      }
+      res.json(dataSource);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch data source" });
+    }
+  });
+
   // Test data source endpoint
   app.post("/api/data-sources/test", requireAuth, async (req, res) => {
     try {
@@ -575,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update last test time
-      await storage.updateDataSource(id, { lastTestAt: new Date() });
+      await storage.updateDataSource(id, { lastPullAt: new Date() });
       
       res.json({ message: "Data source tested successfully", status: "connected" });
     } catch (error) {
@@ -592,13 +605,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Data source not found" });
       }
 
-      // For demo purposes, return empty data structure
-      // In production, this would fetch actual data based on dataSource.type and config
-      res.json({
-        data: [],
-        fields: [],
-        lastUpdated: new Date().toISOString(),
-      });
+      // Update last pull time to track actual data pulls
+      await storage.updateDataSource(id, { lastPullAt: new Date() });
+
+      if (dataSource.type === "api" && (dataSource.config as any)?.curlRequest) {
+        try {
+          // Parse cURL command to extract URL and headers
+          const curlRequest = (dataSource.config as any).curlRequest.trim();
+          const urlMatch = curlRequest.match(/'([^']+)'|"([^"]+)"|(\S+)/g);
+          let url = '';
+          const headers: Record<string, string> = {};
+          
+          // Find URL and headers from cURL command
+          for (let i = 0; i < urlMatch?.length; i++) {
+            const part = urlMatch[i].replace(/['"]/g, '');
+            if (part.startsWith('http')) {
+              url = part;
+            } else if (part === '-H' && i + 1 < urlMatch.length) {
+              const header = urlMatch[i + 1].replace(/['"]/g, '');
+              const [key, ...valueParts] = header.split(':');
+              if (key && valueParts.length > 0) {
+                headers[key.trim()] = valueParts.join(':').trim();
+              }
+            }
+          }
+          
+          if (!url) {
+            return res.json({
+              data: [],
+              fields: [],
+              lastUpdated: new Date().toISOString(),
+              error: "Could not parse URL from cURL request"
+            });
+          }
+          
+          // Make the API request
+          const response = await fetch(url, {
+            method: 'GET',
+            headers,
+          });
+          
+          const responseText = await response.text();
+          let parsedResponse;
+          
+          try {
+            parsedResponse = JSON.parse(responseText);
+          } catch {
+            parsedResponse = { raw: responseText };
+          }
+          
+          // Extract fields from JSON response
+          const extractFields = (obj: any, prefix = ''): string[] => {
+            let fields: string[] = [];
+            if (typeof obj === 'object' && obj !== null) {
+              if (Array.isArray(obj)) {
+                if (obj.length > 0) {
+                  fields = fields.concat(extractFields(obj[0], prefix));
+                }
+              } else {
+                Object.keys(obj).forEach(key => {
+                  const fieldName = prefix ? `${prefix}.${key}` : key;
+                  fields.push(fieldName);
+                  if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                    fields = fields.concat(extractFields(obj[key], fieldName));
+                  }
+                });
+              }
+            }
+            return fields;
+          };
+          
+          const allFields = extractFields(parsedResponse);
+          const selectedFields = (dataSource.config as any)?.selectedFields || allFields;
+          const fieldDisplayNames = (dataSource.config as any)?.fieldDisplayNames || {};
+          
+          // Convert data to chart-friendly format and filter by selected fields
+          let chartData = [];
+          if (Array.isArray(parsedResponse)) {
+            // If it's an array of objects, flatten nested objects and filter by selected fields
+            chartData = parsedResponse.map(item => {
+              const flattened: any = {};
+              const flattenObject = (obj: any, prefix = '') => {
+                Object.keys(obj).forEach(key => {
+                  const value = obj[key];
+                  const newKey = prefix ? `${prefix}.${key}` : key;
+                  
+                  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    flattenObject(value, newKey);
+                  } else {
+                    flattened[newKey] = value;
+                  }
+                });
+              };
+              
+              if (typeof item === 'object' && item !== null) {
+                flattenObject(item);
+                
+                // Filter to only selected fields
+                const filteredItem: any = {};
+                selectedFields.forEach((field: string) => {
+                  if (flattened.hasOwnProperty(field)) {
+                    filteredItem[field] = flattened[field];
+                  }
+                });
+                return filteredItem;
+              }
+              return item;
+            });
+          } else if (parsedResponse && typeof parsedResponse === 'object') {
+            // If it's an object, convert to array format for charts and filter by selected fields
+            chartData = Object.keys(parsedResponse)
+              .filter(key => selectedFields.includes(key))
+              .map(key => ({
+                name: key,
+                value: parsedResponse[key]
+              }));
+          }
+          
+          res.json({
+            data: chartData,
+            fields: selectedFields,
+            fieldDisplayNames: fieldDisplayNames,
+            lastUpdated: new Date().toISOString(),
+          });
+        } catch (error: any) {
+          console.error("Data fetch error:", error);
+          res.json({
+            data: [],
+            fields: [],
+            lastUpdated: new Date().toISOString(),
+            error: error.message || "Failed to fetch API data"
+          });
+        }
+      } else {
+        // For non-API data sources or missing configuration, return empty data
+        res.json({
+          data: [],
+          fields: [],
+          lastUpdated: new Date().toISOString(),
+          message: "Data source type not supported or not configured"
+        });
+      }
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch data" });
     }

@@ -196,10 +196,10 @@ export default function DataSourcesPage() {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Last Test:</span>
+                        <span className="text-muted-foreground">Last Pull:</span>
                         <span className="text-foreground">
-                          {dataSource.lastTestAt 
-                            ? new Date(dataSource.lastTestAt).toLocaleDateString()
+                          {dataSource.lastPullAt 
+                            ? new Date(dataSource.lastPullAt).toLocaleString()
                             : "Never"
                           }
                         </span>

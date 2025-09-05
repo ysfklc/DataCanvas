@@ -33,7 +33,7 @@ export const dataSources = pgTable("data_sources", {
   type: varchar("type", { length: 50 }).notNull(), // 'api', 'scraping', 'database'
   config: json("config").notNull(),
   isActive: boolean("is_active").notNull().default(true),
-  lastTestAt: timestamp("last_test_at"),
+  lastPullAt: timestamp("last_pull_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

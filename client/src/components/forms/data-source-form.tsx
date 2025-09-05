@@ -5,7 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Link, Globe, Database, Plus, PlayCircle, CheckCircle, AlertCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link, Globe, Database, Plus, PlayCircle, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -27,6 +29,10 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
   const [selectedType, setSelectedType] = useState(dataSource?.type || "");
   const [name, setName] = useState(dataSource?.name || "");
   const [curlRequest, setCurlRequest] = useState((dataSource?.config as any)?.curlRequest || "");
+  const [selectedFields, setSelectedFields] = useState<string[]>((dataSource?.config as any)?.selectedFields || []);
+  const [fieldDisplayNames, setFieldDisplayNames] = useState<Record<string, string>>((dataSource?.config as any)?.fieldDisplayNames || {});
+  const [refreshInterval, setRefreshInterval] = useState<number>((dataSource?.config as any)?.refreshInterval || 5);
+  const [refreshUnit, setRefreshUnit] = useState<string>((dataSource?.config as any)?.refreshUnit || "minutes");
   const [isTestingDataSource, setIsTestingDataSource] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [testError, setTestError] = useState<string | null>(null);
@@ -131,7 +137,7 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
       return;
     }
 
-    const config = selectedType === "api" ? { curlRequest } : {};
+    const config = selectedType === "api" ? { curlRequest, selectedFields, fieldDisplayNames, refreshInterval, refreshUnit } : {};
     
     const data = {
       name,
@@ -217,6 +223,46 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
               {isTestingDataSource ? "Testing..." : "Test Data Source"}
             </Button>
           )}
+          
+          {/* Refresh Interval Configuration */}
+          <div className="space-y-2 pt-4 border-t border-border">
+            <Label className="text-sm font-medium text-foreground flex items-center">
+              <Clock className="w-4 h-4 mr-2" />
+              Auto-Refresh Interval
+            </Label>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  type="number"
+                  min="1"
+                  max="999"
+                  placeholder="5"
+                  value={refreshInterval}
+                  onChange={(e) => setRefreshInterval(parseInt(e.target.value) || 5)}
+                  className="w-full"
+                  data-testid="input-refresh-interval"
+                />
+              </div>
+              <div className="w-32">
+                <Select value={refreshUnit} onValueChange={setRefreshUnit}>
+                  <SelectTrigger data-testid="select-refresh-unit">
+                    <SelectValue placeholder="Unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="seconds">Seconds</SelectItem>
+                    <SelectItem value="minutes">Minutes</SelectItem>
+                    <SelectItem value="hours">Hours</SelectItem>
+                    <SelectItem value="days">Days</SelectItem>
+                    <SelectItem value="weeks">Weeks</SelectItem>
+                    <SelectItem value="months">Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Dashboard cards will automatically refresh data every {refreshInterval} {refreshUnit}.
+            </p>
+          </div>
         </div>
       )}
 
@@ -317,23 +363,94 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
                 </div>
               </div>
 
-              {/* Parsed Fields */}
+              {/* Parsed Fields with Selection */}
               {testResults.fields && testResults.fields.length > 0 && (
                 <div>
                   <p className="text-sm font-medium text-foreground mb-2">
-                    Available Fields ({testResults.fields.length}):
+                    Select Fields to Fetch ({testResults.fields.length} available):
                   </p>
-                  <div className="p-3 bg-background rounded border border-border">
-                    <div className="flex flex-wrap gap-2">
+                  <div className="p-3 bg-background rounded border border-border space-y-3">
+                    <div className="flex items-center gap-2 pb-2 border-b border-border">
+                      <Checkbox
+                        id="select-all-fields"
+                        checked={selectedFields.length === testResults.fields.length}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedFields([...testResults.fields]);
+                            // Initialize display names for all fields
+                            const newDisplayNames = { ...fieldDisplayNames };
+                            testResults.fields.forEach((field: string) => {
+                              if (!newDisplayNames[field]) {
+                                newDisplayNames[field] = field.split('.').pop() || field;
+                              }
+                            });
+                            setFieldDisplayNames(newDisplayNames);
+                          } else {
+                            setSelectedFields([]);
+                          }
+                        }}
+                        data-testid="checkbox-select-all-fields"
+                      />
+                      <Label htmlFor="select-all-fields" className="text-sm font-medium">
+                        Select All ({selectedFields.length} selected)
+                      </Label>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-auto">
                       {testResults.fields.map((field: string, index: number) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2 py-1 bg-primary/10 text-primary text-xs rounded-md"
-                        >
-                          {field}
-                        </span>
+                        <div key={index} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`field-${index}`}
+                            checked={selectedFields.includes(field)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedFields([...selectedFields, field]);
+                                // Initialize display name if not set
+                                if (!fieldDisplayNames[field]) {
+                                  setFieldDisplayNames({
+                                    ...fieldDisplayNames,
+                                    [field]: field.split('.').pop() || field
+                                  });
+                                }
+                              } else {
+                                setSelectedFields(selectedFields.filter(f => f !== field));
+                              }
+                            }}
+                            data-testid={`checkbox-field-${field}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <Label
+                              htmlFor={`field-${index}`}
+                              className="text-xs font-medium cursor-pointer block truncate"
+                              title={field}
+                            >
+                              {field}
+                            </Label>
+                            {selectedFields.includes(field) && (
+                              <Input
+                                type="text"
+                                placeholder="Display name"
+                                value={fieldDisplayNames[field] || ''}
+                                onChange={(e) => {
+                                  setFieldDisplayNames({
+                                    ...fieldDisplayNames,
+                                    [field]: e.target.value
+                                  });
+                                }}
+                                className="mt-1 h-6 text-xs"
+                                data-testid={`input-display-name-${field}`}
+                              />
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
+                    {selectedFields.length > 0 && (
+                      <div className="pt-2 border-t border-border">
+                        <p className="text-xs text-muted-foreground">
+                          Selected fields will be used in dashboard cards and charts.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
