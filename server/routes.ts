@@ -419,6 +419,149 @@ export async function registerRoutes(app: Express): Promise<Server> {
           url,
           headers: Object.keys(headers)
         });
+      } else if (type === "jira" && config.jiraUrl && config.jiraUsername && config.jiraPassword) {
+        // JIRA authentication and project fetching
+        const auth = Buffer.from(`${config.jiraUsername}:${config.jiraPassword}`).toString('base64');
+        const baseUrl = config.jiraUrl.replace(/\/$/, ''); // Remove trailing slash
+        
+        try {
+          // Test authentication by fetching projects
+          const projectsResponse = await fetch(`${baseUrl}/rest/api/2/project`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!projectsResponse.ok) {
+            throw new Error(`JIRA authentication failed: ${projectsResponse.status} ${projectsResponse.statusText}`);
+          }
+          
+          const projects = await projectsResponse.json();
+          
+          // Test API access by fetching current user info
+          const userResponse = await fetch(`${baseUrl}/rest/api/2/myself`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          let userInfo = null;
+          if (userResponse.ok) {
+            userInfo = await userResponse.json();
+          }
+          
+          res.json({
+            success: true,
+            message: "JIRA connection successful",
+            projects: projects.map((project: any) => ({
+              key: project.key,
+              name: project.name,
+              id: project.id,
+              projectTypeKey: project.projectTypeKey
+            })),
+            user: userInfo ? {
+              displayName: userInfo.displayName,
+              emailAddress: userInfo.emailAddress,
+              accountId: userInfo.accountId
+            } : null,
+            jiraUrl: baseUrl
+          });
+        } catch (error: any) {
+          console.error("JIRA test error:", error);
+          throw new Error(`JIRA connection failed: ${error.message}`);
+        }
+      } else if (type === "smax" && config.smaxUrl && config.smaxUsername && config.smaxPassword) {
+        // SMAX authentication and service fetching
+        const baseUrl = config.smaxUrl.replace(/\/$/, ''); // Remove trailing slash
+        
+        try {
+          // First, get authentication token
+          const authResponse = await fetch(`${baseUrl}/auth/authentication-endpoint/authenticate/login?TENANTID=1`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              Login: config.smaxUsername,
+              Password: config.smaxPassword
+            })
+          });
+          
+          if (!authResponse.ok) {
+            throw new Error(`SMAX authentication failed: ${authResponse.status} ${authResponse.statusText}`);
+          }
+          
+          const authData = await authResponse.json();
+          const token = authData.token;
+          
+          if (!token) {
+            throw new Error('SMAX authentication failed: No token received');
+          }
+          
+          // Test API access by fetching available entity types/services
+          const entitiesResponse = await fetch(`${baseUrl}/rest/1/metadata`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          let services: { name: string; displayName: string }[] = [];
+          if (entitiesResponse.ok) {
+            const entitiesData = await entitiesResponse.json();
+            // Extract common SMAX entity types
+            services = [
+              { name: 'Request', displayName: 'Service Requests' },
+              { name: 'Incident', displayName: 'Incidents' },
+              { name: 'Problem', displayName: 'Problems' },
+              { name: 'Change', displayName: 'Change Requests' },
+              { name: 'Task', displayName: 'Tasks' },
+              { name: 'KnowledgeDocument', displayName: 'Knowledge Articles' }
+            ];
+          }
+          
+          // Test current user info
+          const userResponse = await fetch(`${baseUrl}/rest/1/ems/Person`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          let userInfo = null;
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            if (userData.entities && userData.entities.length > 0) {
+              const user = userData.entities[0];
+              userInfo = {
+                id: user.entity_id,
+                name: user.Name || user.DisplayName,
+                email: user.Email
+              };
+            }
+          }
+          
+          res.json({
+            success: true,
+            message: "SMAX connection successful",
+            services: services,
+            user: userInfo,
+            smaxUrl: baseUrl,
+            token: token // We'll need this for subsequent requests
+          });
+        } catch (error: any) {
+          console.error("SMAX test error:", error);
+          throw new Error(`SMAX connection failed: ${error.message}`);
+        }
       } else {
         res.status(400).json({ message: "Unsupported data source type for testing" });
       }
@@ -737,8 +880,261 @@ export async function registerRoutes(app: Express): Promise<Server> {
             error: error.message || "Failed to fetch API data"
           });
         }
+      } else if (dataSource.type === "jira" && (dataSource.config as any)?.jiraUrl) {
+        try {
+          const config = dataSource.config as any;
+          const auth = Buffer.from(`${config.jiraUsername}:${config.jiraPassword}`).toString('base64');
+          const baseUrl = config.jiraUrl.replace(/\/$/, '');
+          
+          // Build JQL query
+          let jql = '';
+          if (config.selectedJiraProject) {
+            jql = `project = "${config.selectedJiraProject}"`;
+            if (config.jiraQuery && config.jiraQuery.trim()) {
+              jql += ` AND (${config.jiraQuery.trim()})`;
+            }
+          } else if (config.jiraQuery && config.jiraQuery.trim()) {
+            jql = config.jiraQuery.trim();
+          } else {
+            jql = 'ORDER BY created DESC';
+          }
+          
+          // Fetch issues from JIRA
+          const searchUrl = `${baseUrl}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=100&fields=*all`;
+          const response = await fetch(searchUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`JIRA API error: ${response.status} ${response.statusText}`);
+          }
+          
+          const jiraData = await response.json();
+          const issues = jiraData.issues || [];
+          
+          // Transform JIRA issues to flat structure
+          const chartData = issues.map((issue: any) => ({
+            id: issue.id,
+            key: issue.key,
+            summary: issue.fields.summary || '',
+            status: issue.fields.status?.name || '',
+            assignee: issue.fields.assignee?.displayName || 'Unassigned',
+            reporter: issue.fields.reporter?.displayName || '',
+            priority: issue.fields.priority?.name || '',
+            issueType: issue.fields.issuetype?.name || '',
+            created: issue.fields.created ? new Date(issue.fields.created).toLocaleDateString() : '',
+            updated: issue.fields.updated ? new Date(issue.fields.updated).toLocaleDateString() : '',
+            resolved: issue.fields.resolutiondate ? new Date(issue.fields.resolutiondate).toLocaleDateString() : '',
+            project: issue.fields.project?.name || '',
+            projectKey: issue.fields.project?.key || '',
+            description: issue.fields.description || '',
+            labels: Array.isArray(issue.fields.labels) ? issue.fields.labels.join(', ') : '',
+            components: Array.isArray(issue.fields.components) ? issue.fields.components.map((c: any) => c.name).join(', ') : '',
+            fixVersions: Array.isArray(issue.fields.fixVersions) ? issue.fields.fixVersions.map((v: any) => v.name).join(', ') : '',
+            storyPoints: issue.fields.customfield_10016 || '', // Common story points field
+            sprint: issue.fields.customfield_10020 ? 
+              (Array.isArray(issue.fields.customfield_10020) && issue.fields.customfield_10020.length > 0 ? 
+                issue.fields.customfield_10020[issue.fields.customfield_10020.length - 1].name : '') : ''
+          }));
+          
+          // Get all available fields
+          const allFields = chartData.length > 0 ? Object.keys(chartData[0]) : [];
+          const selectedFields = config.selectedFields || allFields;
+          const fieldDisplayNames = config.fieldDisplayNames || {};
+          
+          // Default field display names for JIRA
+          const defaultJiraFieldNames: Record<string, string> = {
+            id: 'Issue ID',
+            key: 'Issue Key',
+            summary: 'Summary',
+            status: 'Status',
+            assignee: 'Assignee',
+            reporter: 'Reporter',
+            priority: 'Priority',
+            issueType: 'Issue Type',
+            created: 'Created Date',
+            updated: 'Updated Date',
+            resolved: 'Resolved Date',
+            project: 'Project Name',
+            projectKey: 'Project Key',
+            description: 'Description',
+            labels: 'Labels',
+            components: 'Components',
+            fixVersions: 'Fix Versions',
+            storyPoints: 'Story Points',
+            sprint: 'Sprint'
+          };
+          
+          // Merge with custom field names
+          const finalFieldNames = { ...defaultJiraFieldNames, ...fieldDisplayNames };
+          
+          // Filter data by selected fields
+          const filteredData = chartData.map((item: any) => {
+            const filtered: any = {};
+            selectedFields.forEach((field: string) => {
+              if (item.hasOwnProperty(field)) {
+                filtered[field] = item[field];
+              }
+            });
+            return filtered;
+          });
+          
+          res.json({
+            data: filteredData,
+            fields: selectedFields,
+            fieldDisplayNames: finalFieldNames,
+            lastUpdated: new Date().toISOString(),
+            totalIssues: jiraData.total || issues.length,
+            jql: jql
+          });
+        } catch (error: any) {
+          console.error("JIRA data fetch error:", error);
+          res.json({
+            data: [],
+            fields: [],
+            lastUpdated: new Date().toISOString(),
+            error: error.message || "Failed to fetch JIRA data"
+          });
+        }
+      } else if (dataSource.type === "smax" && (dataSource.config as any)?.smaxUrl) {
+        try {
+          const config = dataSource.config as any;
+          const baseUrl = config.smaxUrl.replace(/\/$/, '');
+          
+          // Get authentication token
+          const authResponse = await fetch(`${baseUrl}/auth/authentication-endpoint/authenticate/login?TENANTID=1`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              Login: config.smaxUsername,
+              Password: config.smaxPassword
+            })
+          });
+          
+          if (!authResponse.ok) {
+            throw new Error(`SMAX authentication failed: ${authResponse.status} ${authResponse.statusText}`);
+          }
+          
+          const authData = await authResponse.json();
+          const token = authData.token;
+          
+          if (!token) {
+            throw new Error('SMAX authentication failed: No token received');
+          }
+          
+          // Build query parameters
+          let queryParams = '';
+          if (config.smaxQuery && config.smaxQuery.trim()) {
+            queryParams = `&query=${encodeURIComponent(config.smaxQuery.trim())}`;
+          }
+          
+          // Fetch records from SMAX
+          const entityType = config.selectedSmaxService || 'Request';
+          const searchUrl = `${baseUrl}/rest/1/ems/${entityType}?layout=Id,Title,Status,Priority,AssignedTo,RequestedBy,Category,Subcategory,CreationTime,LastUpdateTime,ClosureTime,Description,Service,ImpactScope,Urgency,Phase&size=100${queryParams}`;
+          
+          const response = await fetch(searchUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`SMAX API error: ${response.status} ${response.statusText}`);
+          }
+          
+          const smaxData = await response.json();
+          const entities = smaxData.entities || [];
+          
+          // Transform SMAX entities to flat structure
+          const chartData = entities.map((entity: any) => ({
+            id: entity.entity_id || entity.Id,
+            title: entity.Title || '',
+            status: entity.Status || '',
+            priority: entity.Priority || '',
+            assignedTo: entity.AssignedTo || 'Unassigned',
+            requestedBy: entity.RequestedBy || '',
+            category: entity.Category || '',
+            subcategory: entity.Subcategory || '',
+            creationTime: entity.CreationTime ? new Date(entity.CreationTime).toLocaleDateString() : '',
+            lastUpdateTime: entity.LastUpdateTime ? new Date(entity.LastUpdateTime).toLocaleDateString() : '',
+            closureTime: entity.ClosureTime ? new Date(entity.ClosureTime).toLocaleDateString() : '',
+            description: entity.Description || '',
+            service: entity.Service || '',
+            impactScope: entity.ImpactScope || '',
+            urgency: entity.Urgency || '',
+            phase: entity.Phase || '',
+            entityType: entityType
+          }));
+          
+          // Get all available fields
+          const allFields = chartData.length > 0 ? Object.keys(chartData[0]) : [];
+          const selectedFields = config.selectedFields || allFields;
+          const fieldDisplayNames = config.fieldDisplayNames || {};
+          
+          // Default field display names for SMAX
+          const defaultSmaxFieldNames: Record<string, string> = {
+            id: 'ID',
+            title: 'Title',
+            status: 'Status',
+            priority: 'Priority',
+            assignedTo: 'Assigned To',
+            requestedBy: 'Requested By',
+            category: 'Category',
+            subcategory: 'Subcategory',
+            creationTime: 'Created',
+            lastUpdateTime: 'Last Updated',
+            closureTime: 'Closed',
+            description: 'Description',
+            service: 'Service',
+            impactScope: 'Impact Scope',
+            urgency: 'Urgency',
+            phase: 'Phase',
+            entityType: 'Type'
+          };
+          
+          // Merge with custom field names
+          const finalFieldNames = { ...defaultSmaxFieldNames, ...fieldDisplayNames };
+          
+          // Filter data by selected fields
+          const filteredData = chartData.map((item: any) => {
+            const filtered: any = {};
+            selectedFields.forEach((field: string) => {
+              if (item.hasOwnProperty(field)) {
+                filtered[field] = item[field];
+              }
+            });
+            return filtered;
+          });
+          
+          res.json({
+            data: filteredData,
+            fields: selectedFields,
+            fieldDisplayNames: finalFieldNames,
+            lastUpdated: new Date().toISOString(),
+            totalRecords: smaxData.meta?.total_count || entities.length,
+            entityType: entityType,
+            query: config.smaxQuery || ''
+          });
+        } catch (error: any) {
+          console.error("SMAX data fetch error:", error);
+          res.json({
+            data: [],
+            fields: [],
+            lastUpdated: new Date().toISOString(),
+            error: error.message || "Failed to fetch SMAX data"
+          });
+        }
       } else {
-        // For non-API data sources or missing configuration, return empty data
+        // For non-supported data sources or missing configuration, return empty data
         res.json({
           data: [],
           fields: [],

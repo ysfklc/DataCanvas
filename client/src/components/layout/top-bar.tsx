@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Menu, Plus, Bell, Sun, Moon } from "lucide-react";
+import { Menu, Plus, Sun, Moon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface TopBarProps {
@@ -63,14 +63,6 @@ export function TopBar({
               {createButtonText}
             </Button>
           )}
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="text-muted-foreground hover:text-foreground"
-            data-testid="button-notifications"
-          >
-            <Bell className="w-5 h-5" />
-          </Button>
           <Button 
             variant="ghost" 
             size="sm" 

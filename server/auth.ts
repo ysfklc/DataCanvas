@@ -158,7 +158,7 @@ export async function createTestLDAPConfig(): Promise<void> {
   // Create test LDAP configuration
   const testLDAPConfig: LDAPConfig = {
     url: "ldap://localhost:389",
-    baseDN: "ou=users,dc=example,dc=com",
+    baseDN: "dc=example,dc=com",
     bindDN: "cn=admin,dc=example,dc=com",
     bindCredentials: "admin",
     searchFilter: "(uid={username})",
@@ -183,6 +183,9 @@ export async function searchLDAPUser(username: string): Promise<any | null> {
     }
 
     const config = ldapSettings.value as LDAPConfig;
+    console.log(`LDAP search for user: ${username}`);
+    console.log(`LDAP config - URL: ${config.url}, baseDN: ${config.baseDN}, searchFilter: ${config.searchFilter}`);
+    
     const client = ldap.createClient({
       url: config.url,
       tlsOptions: config.tlsOptions || { rejectUnauthorized: false },
@@ -193,35 +196,45 @@ export async function searchLDAPUser(username: string): Promise<any | null> {
       const bindDN = config.bindDN || "";
       const bindCredentials = config.bindCredentials || "";
 
+      console.log(`Attempting LDAP bind with DN: ${bindDN}`);
       client.bind(bindDN, bindCredentials, (bindErr) => {
         if (bindErr) {
-          console.error("LDAP bind error:", bindErr);
+          console.error("LDAP bind error:", bindErr.message || bindErr);
           client.unbind();
           resolve(null);
           return;
         }
 
+        console.log("LDAP bind successful");
+        
         // Search for the user
         const searchFilter = config.searchFilter.replace("{username}", username);
+        console.log(`Searching with filter: ${searchFilter} in baseDN: ${config.baseDN}`);
+        
         client.search(config.baseDN, {
           filter: searchFilter,
           scope: "sub",
         }, (searchErr, res) => {
           if (searchErr) {
-            console.error("LDAP search error:", searchErr);
+            console.error("LDAP search error:", searchErr.message || searchErr);
             client.unbind();
             resolve(null);
             return;
           }
 
           let userInfo: any = null;
+          let entryCount = 0;
 
           res.on("searchEntry", (entry) => {
+            entryCount++;
+            console.log(`Found LDAP entry ${entryCount}: ${entry.pojo.objectName}`);
+            
             const userData = entry.pojo;
             const attributes: any = {};
             
             // Parse LDAP attributes into a more accessible format
             if (userData.attributes) {
+              console.log("Available attributes:", Object.keys(userData.attributes));
               for (const [key, values] of Object.entries(userData.attributes)) {
                 attributes[key] = Array.isArray(values) ? values[0] : values;
               }
@@ -233,15 +246,18 @@ export async function searchLDAPUser(username: string): Promise<any | null> {
               fullName: attributes.cn || attributes.displayName || username,
               dn: userData.objectName,
             };
+            
+            console.log("Parsed user info:", userInfo);
           });
 
           res.on("end", () => {
+            console.log(`LDAP search completed. Found ${entryCount} entries.`);
             client.unbind();
             resolve(userInfo);
           });
 
           res.on("error", (err) => {
-            console.error("LDAP search result error:", err);
+            console.error("LDAP search result error:", err.message || err);
             client.unbind();
             resolve(null);
           });
