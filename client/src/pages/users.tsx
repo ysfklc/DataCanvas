@@ -44,12 +44,14 @@ export default function UsersPage() {
     return isActive ? "text-chart-2" : "text-muted-foreground";
   };
 
+  const isAdmin = currentUser?.role === "admin";
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TopBar 
         title="User Management"
         onSidebarToggle={() => {}}
-        showCreateButton={true}
+        showCreateButton={isAdmin}
         onCreateClick={handleCreateUser}
         createButtonText="Add User"
       />
@@ -75,11 +77,15 @@ export default function UsersPage() {
           <div className="text-center py-12">
             <UsersIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">No users found</h3>
-            <p className="text-muted-foreground mb-4">Add your first user to get started</p>
-            <Button onClick={handleCreateUser} data-testid="button-create-first-user">
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add User
-            </Button>
+            <p className="text-muted-foreground mb-4">
+              {isAdmin ? "Add your first user to get started" : "No users to display"}
+            </p>
+            {isAdmin && (
+              <Button onClick={handleCreateUser} data-testid="button-create-first-user">
+                <UserPlus className="w-4 h-4 mr-2" />
+                Add User
+              </Button>
+            )}
           </div>
         ) : (
           <Card>

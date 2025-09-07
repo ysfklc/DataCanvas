@@ -78,7 +78,10 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   });
 
   const searchLdapMutation = useMutation({
-    mutationFn: (username: string) => apiRequest("GET", `/api/auth/search-ldap/${username}`),
+    mutationFn: async (username: string) => {
+      const response = await apiRequest("GET", `/api/auth/search-ldap/${username}`);
+      return response.json();
+    },
     onMutate: () => {
       setLdapSearchStatus('searching');
     },

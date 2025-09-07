@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { authenticateUser, createDefaultAdmin, createTestLDAPConfig, createTestLDAPUser, searchLDAPUser, hashPassword } from "./auth";
+import { authenticateUser, createDefaultAdmin, createTestLDAPConfig, createTestLDAPUser, searchLDAPUser, hashPassword, authenticateLDAP, testLDAPConnection } from "./auth";
 import { insertUserSchema, insertDashboardSchema, insertDataSourceSchema, insertDashboardCardSchema, insertSettingSchema } from "@shared/schema";
 import session from "express-session";
 import MemoryStore from "memorystore";
@@ -91,10 +91,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get("/api/users", requireAdmin, async (req, res) => {
+  app.get("/api/users", requireAuth, async (req, res) => {
     try {
-      const users = await storage.getAllUsers();
-      res.json(users.map(user => ({ ...user, password: undefined })));
+      const currentUser = req.session?.user;
+      
+      if (!currentUser) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      if (currentUser.role === "admin") {
+        // Admins can see all users
+        const users = await storage.getAllUsers();
+        res.json(users.map(user => ({ ...user, password: undefined })));
+      } else {
+        // Standard users can only see their own account
+        const user = await storage.getUser(currentUser.id);
+        if (user) {
+          res.json([{ ...user, password: undefined }]);
+        } else {
+          res.json([]);
+        }
+      }
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch users" });
     }
@@ -646,8 +663,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Settings routes
-  app.get("/api/settings", requireAdmin, async (req, res) => {
+  // Settings routes - standard users can view settings (read-only)
+  app.get("/api/settings", requireAuth, async (req, res) => {
     try {
       const settings = await storage.getAllSettings();
       res.json(settings);
@@ -694,29 +711,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // LDAP test endpoint
   app.post("/api/auth/test-ldap", requireAdmin, async (req, res) => {
     try {
-      const { username, password } = req.body;
+      const { username, password, config } = req.body;
       
       if (!username || !password) {
         return res.status(400).json({ message: "Username and password are required" });
       }
 
-      const ldapSettings = await storage.getSetting("ldap_config");
-      if (!ldapSettings) {
-        return res.status(404).json({ message: "LDAP configuration not found" });
+      if (!config) {
+        return res.status(400).json({ message: "LDAP configuration is required for testing" });
       }
 
-      // Test LDAP authentication (this won't actually connect to a server in test mode)
-      res.json({ 
-        message: "LDAP configuration loaded successfully", 
-        config: {
-          url: (ldapSettings.value as any).url,
-          baseDN: (ldapSettings.value as any).baseDN,
-          searchFilter: (ldapSettings.value as any).searchFilter,
-        },
-        note: "This is a test configuration. In production, this would attempt to authenticate against the LDAP server."
-      });
+      // Test LDAP connection using the provided configuration directly
+      const testResult = await testLDAPConnection(config, username, password);
+      
+      if (testResult.success) {
+        res.json({ 
+          message: "LDAP connection and authentication successful", 
+          config: {
+            url: config.url,
+            baseDN: config.baseDN,
+            searchFilter: config.searchFilter,
+          },
+          status: "success"
+        });
+      } else {
+        // Connection failed - could be server unreachable, wrong config, or invalid credentials
+        res.status(400).json({ 
+          message: testResult.error || "LDAP connection or authentication failed. Please check your server configuration and test credentials.",
+          status: "failed"
+        });
+      }
     } catch (error) {
-      res.status(500).json({ message: "LDAP test failed" });
+      console.error("LDAP test error:", error);
+      res.status(500).json({ 
+        message: "LDAP test failed due to server error. Please check your configuration and try again.",
+        status: "error"
+      });
     }
   });
 

@@ -61,7 +61,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         
         <nav className="p-4" data-testid="sidebar-navigation">
           <ul className="space-y-2">
-            {navigation.map((item) => {
+            {navigation
+              .filter((item) => {
+                // Hide Settings for non-admin users
+                if (item.name === "Settings" && user?.role !== "admin") {
+                  return false;
+                }
+                return true;
+              })
+              .map((item) => {
               const isActive = location === item.href;
               const Icon = item.icon;
               

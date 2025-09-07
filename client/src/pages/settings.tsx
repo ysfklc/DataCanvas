@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Server, Shield, Database, Save, TestTube, CheckCircle, AlertCircle } from "lucide-react";
+import { Server, Shield, Database, Save, TestTube, CheckCircle, AlertCircle, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 
 interface LDAPSettings {
   url: string;
@@ -33,6 +34,8 @@ interface AccessSettings {
 export default function SettingsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   
   const [ldapSettings, setLdapSettings] = useState<LDAPSettings>({
     url: "ldap://localhost:389",
@@ -77,7 +80,10 @@ export default function SettingsPage() {
 
   const testLdapMutation = useMutation({
     mutationFn: (credentials: { username: string; password: string }) =>
-      apiRequest("POST", "/api/auth/test-ldap", credentials),
+      apiRequest("POST", "/api/auth/test-ldap", { 
+        ...credentials, 
+        config: ldapSettings 
+      }),
     onMutate: () => {
       setLdapTestStatus('testing');
       setLdapTestMessage('Testing connection...');
@@ -156,26 +162,27 @@ export default function SettingsPage() {
     testLdapMutation.mutate({ username: 'testuser', password: 'testpass' });
   };
 
-  const handleSaveLdap = (e: React.FormEvent) => {
+  const handleSaveLdap = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // If LDAP is disabled, only save the disabled state
+    // If LDAP is disabled, save the disabled state and deactivate LDAP users
     if (!ldapEnabled) {
-      apiRequest("POST", "/api/settings", { key: "ldap_enabled", value: false })
-        .then(() => {
-          toast({
-            title: "LDAP settings saved",
-            description: "LDAP authentication has been disabled.",
-          });
-          queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
-        })
-        .catch(() => {
-          toast({
-            title: "Failed to save LDAP settings",
-            description: "Please try again.",
-            variant: "destructive",
-          });
+      try {
+        await apiRequest("POST", "/api/settings", { key: "ldap_enabled", value: false });
+        await apiRequest("POST", "/api/users/deactivate-ldap");
+        toast({
+          title: "LDAP settings saved",
+          description: "LDAP authentication has been disabled and LDAP users have been deactivated.",
         });
+        queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      } catch (error) {
+        toast({
+          title: "Failed to save LDAP settings",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+      }
       return;
     }
     
@@ -203,6 +210,18 @@ export default function SettingsPage() {
       />
       
       <div className="flex-1 overflow-auto p-6">
+        {!isAdmin && (
+          <div className="bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2">
+              <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-medium text-blue-800 dark:text-blue-300">Read-Only View</span>
+            </div>
+            <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+              You can view system settings but cannot modify them. Contact your administrator to make changes.
+            </p>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* LDAP Configuration */}
           <Card>
@@ -224,41 +243,15 @@ export default function SettingsPage() {
                   </div>
                   <Switch
                     checked={ldapEnabled}
-                    onCheckedChange={async (enabled) => {
+                    onCheckedChange={(enabled) => {
                       setLdapEnabled(enabled);
-                      // Automatically save when toggled
-                      try {
-                        await apiRequest("POST", "/api/settings", { 
-                          key: "ldap_enabled", 
-                          value: enabled 
-                        });
-                        
-                        if (!enabled) {
-                          // Deactivate LDAP users when disabling LDAP
-                          await apiRequest("POST", "/api/users/deactivate-ldap");
-                          toast({
-                            title: "LDAP disabled",
-                            description: "LDAP authentication has been disabled and LDAP users have been deactivated.",
-                          });
-                        } else {
-                          toast({
-                            title: "LDAP enabled",
-                            description: "LDAP authentication has been enabled.",
-                          });
-                        }
-                        
-                        queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
-                        queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-                      } catch (error) {
-                        // Revert the toggle if save fails
-                        setLdapEnabled(!enabled);
-                        toast({
-                          title: "Failed to update LDAP settings",
-                          description: "Please try again.",
-                          variant: "destructive",
-                        });
+                      // Reset test status when toggling
+                      if (enabled) {
+                        setLdapTestStatus('idle');
+                        setLdapTestMessage('');
                       }
                     }}
+                    disabled={!isAdmin}
                     data-testid="switch-ldap-enabled"
                   />
                 </div>
@@ -272,7 +265,7 @@ export default function SettingsPage() {
                     placeholder="ldap://ldap.company.com:389"
                     value={ldapSettings.url}
                     onChange={(e) => setLdapSettings(prev => ({ ...prev, url: e.target.value }))}
-                    disabled={!ldapEnabled}
+                    disabled={!isAdmin || !ldapEnabled}
                     data-testid="input-ldap-url"
                   />
                 </div>
@@ -285,7 +278,7 @@ export default function SettingsPage() {
                     placeholder="ou=users,dc=company,dc=com"
                     value={ldapSettings.baseDN}
                     onChange={(e) => setLdapSettings(prev => ({ ...prev, baseDN: e.target.value }))}
-                    disabled={!ldapEnabled}
+                    disabled={!isAdmin || !ldapEnabled}
                     data-testid="input-ldap-base-dn"
                   />
                 </div>
@@ -298,7 +291,7 @@ export default function SettingsPage() {
                     placeholder="cn=admin,dc=company,dc=com"
                     value={ldapSettings.bindDN}
                     onChange={(e) => setLdapSettings(prev => ({ ...prev, bindDN: e.target.value }))}
-                    disabled={!ldapEnabled}
+                    disabled={!isAdmin || !ldapEnabled}
                     data-testid="input-ldap-bind-dn"
                   />
                 </div>
@@ -311,7 +304,7 @@ export default function SettingsPage() {
                     placeholder="••••••••"
                     value={ldapSettings.bindCredentials}
                     onChange={(e) => setLdapSettings(prev => ({ ...prev, bindCredentials: e.target.value }))}
-                    disabled={!ldapEnabled}
+                    disabled={!isAdmin || !ldapEnabled}
                     data-testid="input-ldap-bind-password"
                   />
                 </div>
@@ -324,7 +317,7 @@ export default function SettingsPage() {
                     placeholder="(uid={username})"
                     value={ldapSettings.searchFilter}
                     onChange={(e) => setLdapSettings(prev => ({ ...prev, searchFilter: e.target.value }))}
-                    disabled={!ldapEnabled}
+                    disabled={!isAdmin || !ldapEnabled}
                     data-testid="input-ldap-search-filter"
                   />
                 </div>
@@ -339,7 +332,7 @@ export default function SettingsPage() {
                         tlsOptions: { ...prev.tlsOptions, rejectUnauthorized: !checked }
                       }))
                     }
-                    disabled={!ldapEnabled}
+                    disabled={!isAdmin || !ldapEnabled}
                     data-testid="checkbox-ignore-certificate"
                   />
                   <Label htmlFor="rejectUnauthorized">Ignore SSL Certificate</Label>
@@ -364,7 +357,7 @@ export default function SettingsPage() {
                     type="button"
                     variant="outline"
                     onClick={handleTestLdap}
-                    disabled={!ldapEnabled || testLdapMutation.isPending}
+                    disabled={!isAdmin || !ldapEnabled || testLdapMutation.isPending}
                     data-testid="button-test-ldap"
                   >
                     <TestTube className="w-4 h-4 mr-2" />
@@ -373,7 +366,7 @@ export default function SettingsPage() {
                   
                   <Button 
                     type="submit" 
-                    disabled={!ldapEnabled || saveLdapMutation.isPending || (ldapEnabled && ldapTestStatus !== 'success')}
+                    disabled={!isAdmin || !ldapEnabled || saveLdapMutation.isPending || (ldapEnabled && ldapTestStatus !== 'success')}
                     data-testid="button-save-ldap"
                   >
                     <Save className="w-4 h-4 mr-2" />
@@ -400,6 +393,7 @@ export default function SettingsPage() {
                   <Select 
                     value={accessSettings.defaultAccess}
                     onValueChange={(value) => setAccessSettings(prev => ({ ...prev, defaultAccess: value }))}
+                    disabled={!isAdmin}
                   >
                     <SelectTrigger data-testid="select-default-access">
                       <SelectValue />
@@ -422,6 +416,7 @@ export default function SettingsPage() {
                         onCheckedChange={(checked) => 
                           setAccessSettings(prev => ({ ...prev, allowPublicView: !!checked }))
                         }
+                        disabled={!isAdmin}
                         data-testid="checkbox-allow-public-view"
                       />
                       <Label htmlFor="allowPublicView" className="text-sm">
@@ -435,6 +430,7 @@ export default function SettingsPage() {
                         onCheckedChange={(checked) => 
                           setAccessSettings(prev => ({ ...prev, requirePublicAuth: !!checked }))
                         }
+                        disabled={!isAdmin}
                         data-testid="checkbox-require-public-auth"
                       />
                       <Label htmlFor="requirePublicAuth" className="text-sm">
@@ -452,6 +448,7 @@ export default function SettingsPage() {
                     placeholder="60"
                     value={accessSettings.sessionTimeout}
                     onChange={(e) => setAccessSettings(prev => ({ ...prev, sessionTimeout: parseInt(e.target.value) || 60 }))}
+                    disabled={!isAdmin}
                     data-testid="input-session-timeout"
                   />
                 </div>

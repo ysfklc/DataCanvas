@@ -18,18 +18,24 @@ export async function authenticateUser(identifier: string, password: string): Pr
     user = await storage.getUserByEmail(identifier);
   }
 
-  if (!user || !user.password || !user.isActive) {
+  if (!user || !user.isActive) {
     return null;
   }
 
   // For local authentication, verify password
   if (user.authMethod === "local") {
+    if (!user.password) {
+      console.error("Local user missing password hash");
+      return null;
+    }
     const isValid = await comparePassword(password, user.password);
     if (!isValid) {
       return null;
     }
   } else if (user.authMethod === "ldap") {
-    const isValid = await authenticateLDAP(identifier, password);
+    // LDAP users should have null password since they authenticate via LDAP
+    // Use the username from the user record for LDAP authentication
+    const isValid = await authenticateLDAP(user.username, password);
     if (!isValid) {
       return null;
     }
@@ -68,11 +74,25 @@ export async function authenticateLDAP(username: string, password: string): Prom
     });
 
     return new Promise((resolve) => {
+      // Handle client connection errors to prevent server crash
+      client.on('error', (err) => {
+        console.error("LDAP client connection error:", err.message || err);
+        resolve(false);
+      });
+
+      // Set a timeout for the connection attempt
+      const timeout = setTimeout(() => {
+        console.error("LDAP connection timeout");
+        client.unbind();
+        resolve(false);
+      }, 5000); // 5 second timeout
+
       // First bind with service account if provided, otherwise anonymous
       const bindDN = config.bindDN || "";
       const bindCredentials = config.bindCredentials || "";
 
       client.bind(bindDN, bindCredentials, (bindErr) => {
+        clearTimeout(timeout);
         if (bindErr) {
           console.error("LDAP bind error:", bindErr);
           client.unbind();
@@ -192,12 +212,26 @@ export async function searchLDAPUser(username: string): Promise<any | null> {
     });
 
     return new Promise((resolve) => {
+      // Handle client connection errors to prevent server crash
+      client.on('error', (err) => {
+        console.error("LDAP client connection error:", err.message || err);
+        resolve(null);
+      });
+
+      // Set a timeout for the connection attempt
+      const timeout = setTimeout(() => {
+        console.error("LDAP connection timeout");
+        client.unbind();
+        resolve(null);
+      }, 5000); // 5 second timeout
+
       // First bind with service account if provided, otherwise anonymous
       const bindDN = config.bindDN || "";
       const bindCredentials = config.bindCredentials || "";
 
       console.log(`Attempting LDAP bind with DN: ${bindDN}`);
       client.bind(bindDN, bindCredentials, (bindErr) => {
+        clearTimeout(timeout);
         if (bindErr) {
           console.error("LDAP bind error:", bindErr.message || bindErr);
           client.unbind();
@@ -284,4 +318,50 @@ export async function createTestLDAPUser(): Promise<void> {
     role: "standard",
     authMethod: "ldap",
   });
+}
+
+export async function testLDAPConnection(config: LDAPConfig, username: string, password: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = ldap.createClient({
+      url: config.url,
+      tlsOptions: config.tlsOptions || { rejectUnauthorized: false },
+    });
+
+    return new Promise((resolve) => {
+      // Handle client connection errors to prevent server crash
+      client.on('error', (err) => {
+        console.error("LDAP client connection error:", err.message || err);
+        resolve({ success: false, error: `Connection failed: ${err.message || err}` });
+      });
+
+      // Set a timeout for the connection attempt
+      const timeout = setTimeout(() => {
+        console.error("LDAP connection timeout");
+        client.unbind();
+        resolve({ success: false, error: "Connection timeout after 5 seconds" });
+      }, 5000); // 5 second timeout
+
+      // First bind with service account if provided, otherwise anonymous
+      const bindDN = config.bindDN || "";
+      const bindCredentials = config.bindCredentials || "";
+
+      client.bind(bindDN, bindCredentials, (bindErr) => {
+        clearTimeout(timeout);
+        if (bindErr) {
+          console.error("LDAP bind error:", bindErr);
+          client.unbind();
+          resolve({ success: false, error: `Authentication failed: ${bindErr.message || bindErr}` });
+          return;
+        }
+
+        // If bind was successful, the LDAP connection is working
+        console.log("LDAP bind successful - connection test passed");
+        client.unbind();
+        resolve({ success: true });
+      });
+    });
+  } catch (error) {
+    console.error("LDAP authentication error:", error);
+    return { success: false, error: `Configuration error: ${error}` };
+  }
 }
