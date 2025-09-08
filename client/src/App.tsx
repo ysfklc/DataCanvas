@@ -11,6 +11,8 @@ import DataSourcesPage from "@/pages/data-sources";
 import UsersPage from "@/pages/users";
 import SettingsPage from "@/pages/settings";
 import LoginPage from "@/pages/login";
+import PasswordResetRequestPage from "@/pages/password-reset-request";
+import PasswordResetPage from "@/pages/password-reset";
 import NotFound from "@/pages/not-found";
 import PublicDashboardPage from "@/pages/public-dashboard";
 import PublicDashboardsPage from "@/pages/public-dashboards";
@@ -59,6 +61,9 @@ function App() {
       <AuthProvider>
         <TooltipProvider>
           <Switch>
+            <Route path="/login" component={LoginPage} />
+            <Route path="/password-reset-request" component={PasswordResetRequestPage} />
+            <Route path="/password-reset" component={PasswordResetPage} />
             <Route path="/public/dashboards" component={PublicDashboardsPage} />
             <Route path="/public/dashboard/:id" component={PublicDashboardPage} />
             <Route>

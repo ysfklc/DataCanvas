@@ -57,9 +57,19 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: varchar("token", { length: 255 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  isUsed: boolean("is_used").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations
 export const userRelations = relations(users, ({ many }) => ({
   dashboards: many(dashboards),
+  passwordResetTokens: many(passwordResetTokens),
 }));
 
 export const dashboardRelations = relations(dashboards, ({ one, many }) => ({
@@ -82,6 +92,13 @@ export const dashboardCardRelations = relations(dashboardCards, ({ one }) => ({
   dataSource: one(dataSources, {
     fields: [dashboardCards.dataSourceId],
     references: [dataSources.id],
+  }),
+}));
+
+export const passwordResetTokenRelations = relations(passwordResetTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [passwordResetTokens.userId],
+    references: [users.id],
   }),
 }));
 
@@ -112,6 +129,11 @@ export const insertSettingSchema = createInsertSchema(settings).omit({
   updatedAt: true,
 });
 
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -123,3 +145,5 @@ export type DashboardCard = typeof dashboardCards.$inferSelect;
 export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;

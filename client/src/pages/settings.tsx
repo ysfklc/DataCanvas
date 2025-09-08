@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Server, Shield, Database, Save, TestTube, CheckCircle, AlertCircle, Eye } from "lucide-react";
+import { Server, Shield, Database, Save, TestTube, CheckCircle, AlertCircle, Eye, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -29,6 +29,18 @@ interface AccessSettings {
   allowPublicView: boolean;
   requirePublicAuth: boolean;
   sessionTimeout: number;
+}
+
+interface MailSettings {
+  host: string;
+  port: number;
+  secure: boolean;
+  auth: {
+    user: string;
+    pass: string;
+  };
+  from: string;
+  enabled: boolean;
 }
 
 export default function SettingsPage() {
@@ -59,6 +71,21 @@ export default function SettingsPage() {
     sessionTimeout: 60,
   });
 
+  const [mailSettings, setMailSettings] = useState<MailSettings>({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: "",
+      pass: "",
+    },
+    from: "noreply@example.com",
+    enabled: false,
+  });
+
+  const [mailTestStatus, setMailTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [mailTestMessage, setMailTestMessage] = useState('');
+
   const { data: settings = [], isLoading } = useQuery({
     queryKey: ["/api/settings"],
   });
@@ -73,6 +100,8 @@ export default function SettingsPage() {
           setLdapEnabled(!!setting.value);
         } else if (setting.key === "access") {
           setAccessSettings(setting.value);
+        } else if (setting.key === "mail_config") {
+          setMailSettings(setting.value);
         }
       });
     }
@@ -148,6 +177,54 @@ export default function SettingsPage() {
     },
   });
 
+  const testMailMutation = useMutation({
+    mutationFn: (testEmail: string) =>
+      apiRequest("POST", "/api/settings/test-mail", { 
+        config: mailSettings,
+        testEmail
+      }),
+    onMutate: () => {
+      setMailTestStatus('testing');
+      setMailTestMessage('Sending test email...');
+    },
+    onSuccess: (data: any) => {
+      setMailTestStatus('success');
+      setMailTestMessage(data.message || 'Test email sent successfully!');
+      toast({
+        title: "Mail Test Successful",
+        description: "Test email sent successfully. Check your inbox.",
+      });
+    },
+    onError: (error: any) => {
+      setMailTestStatus('error');
+      setMailTestMessage(error.message || 'Failed to send test email');
+      toast({
+        title: "Mail Test Failed",
+        description: "Please check your configuration and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const saveMailMutation = useMutation({
+    mutationFn: (settings: MailSettings) =>
+      apiRequest("POST", "/api/settings", { key: "mail_config", value: settings }),
+    onSuccess: () => {
+      toast({
+        title: "Mail settings saved",
+        description: "Email configuration has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to save mail settings",
+        description: "Please check your configuration and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleTestLdap = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ldapEnabled) {
@@ -202,6 +279,48 @@ export default function SettingsPage() {
     saveAccessMutation.mutate(accessSettings);
   };
 
+  const handleTestMail = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mailSettings.enabled) {
+      toast({
+        title: "Mail Disabled",
+        description: "Please enable mail configuration before testing.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const testEmail = prompt("Enter an email address to send a test email to:");
+    if (testEmail && /\S+@\S+\.\S+/.test(testEmail)) {
+      testMailMutation.mutate(testEmail);
+    } else {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveMail = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!mailSettings.enabled) {
+      // Just save disabled state
+      saveMailMutation.mutate(mailSettings);
+      return;
+    }
+    
+    if (mailTestStatus !== 'success') {
+      toast({
+        title: "Test Required",
+        description: "Please test the mail configuration before saving settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+    saveMailMutation.mutate(mailSettings);
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TopBar 
@@ -223,6 +342,158 @@ export default function SettingsPage() {
         )}
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Mail Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Mail className="w-5 h-5 mr-2 text-primary" />
+                Email Configuration
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Mail Enable Toggle */}
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div className="space-y-1">
+                    <Label className="text-base font-medium">Enable Email Sending</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable SMTP email functionality for password resets and notifications.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={mailSettings.enabled}
+                    onCheckedChange={(enabled) => {
+                      setMailSettings(prev => ({ ...prev, enabled }));
+                      if (enabled) {
+                        setMailTestStatus('idle');
+                        setMailTestMessage('');
+                      }
+                    }}
+                    disabled={!isAdmin}
+                    data-testid="switch-mail-enabled"
+                  />
+                </div>
+                
+                <form onSubmit={handleSaveMail} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="mailHost">SMTP Host</Label>
+                      <Input
+                        id="mailHost"
+                        type="text"
+                        placeholder="smtp.gmail.com"
+                        value={mailSettings.host}
+                        onChange={(e) => setMailSettings(prev => ({ ...prev, host: e.target.value }))}
+                        disabled={!isAdmin || !mailSettings.enabled}
+                        data-testid="input-mail-host"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="mailPort">SMTP Port</Label>
+                      <Input
+                        id="mailPort"
+                        type="number"
+                        placeholder="587"
+                        value={mailSettings.port}
+                        onChange={(e) => setMailSettings(prev => ({ ...prev, port: parseInt(e.target.value) || 587 }))}
+                        disabled={!isAdmin || !mailSettings.enabled}
+                        data-testid="input-mail-port"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="mailUser">Username</Label>
+                    <Input
+                      id="mailUser"
+                      type="text"
+                      placeholder="your-email@example.com"
+                      value={mailSettings.auth.user}
+                      onChange={(e) => setMailSettings(prev => ({ ...prev, auth: { ...prev.auth, user: e.target.value } }))}
+                      disabled={!isAdmin || !mailSettings.enabled}
+                      data-testid="input-mail-user"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="mailPass">Password</Label>
+                    <Input
+                      id="mailPass"
+                      type="password"
+                      placeholder="••••••••••••"
+                      value={mailSettings.auth.pass}
+                      onChange={(e) => setMailSettings(prev => ({ ...prev, auth: { ...prev.auth, pass: e.target.value } }))}
+                      disabled={!isAdmin || !mailSettings.enabled}
+                      data-testid="input-mail-pass"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="mailFrom">From Address</Label>
+                    <Input
+                      id="mailFrom"
+                      type="email"
+                      placeholder="noreply@yourcompany.com"
+                      value={mailSettings.from}
+                      onChange={(e) => setMailSettings(prev => ({ ...prev, from: e.target.value }))}
+                      disabled={!isAdmin || !mailSettings.enabled}
+                      data-testid="input-mail-from"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="mailSecure"
+                      checked={mailSettings.secure}
+                      onCheckedChange={(checked) => 
+                        setMailSettings(prev => ({ ...prev, secure: !!checked }))
+                      }
+                      disabled={!isAdmin || !mailSettings.enabled}
+                      data-testid="checkbox-mail-secure"
+                    />
+                    <Label htmlFor="mailSecure">Use SSL/TLS (Port 465)</Label>
+                  </div>
+
+                  {/* Test Mail Status */}
+                  {mailTestStatus !== 'idle' && (
+                    <div className={`flex items-center space-x-2 p-3 rounded-lg ${
+                      mailTestStatus === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
+                      mailTestStatus === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' :
+                      'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+                    }`}>
+                      {mailTestStatus === 'success' && <CheckCircle className="w-4 h-4" />}
+                      {mailTestStatus === 'error' && <AlertCircle className="w-4 h-4" />}
+                      {mailTestStatus === 'testing' && <TestTube className="w-4 h-4 animate-pulse" />}
+                      <span className="text-sm">{mailTestMessage}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      onClick={handleTestMail}
+                      disabled={!isAdmin || !mailSettings.enabled || testMailMutation.isPending}
+                      data-testid="button-test-mail"
+                    >
+                      <TestTube className="w-4 h-4 mr-2" />
+                      {testMailMutation.isPending ? "Testing..." : "Send Test Email"}
+                    </Button>
+                    
+                    <Button 
+                      type="submit" 
+                      disabled={!isAdmin || (mailSettings.enabled && mailTestStatus !== 'success') || saveMailMutation.isPending}
+                      data-testid="button-save-mail"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      {saveMailMutation.isPending ? "Saving..." : "Save Mail Settings"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* LDAP Configuration */}
           <Card>
             <CardHeader>

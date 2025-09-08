@@ -91,9 +91,9 @@ export default function Login() {
                   Remember me
                 </Label>
               </div>
-              <a href="#" className="text-sm text-primary hover:underline">
+              <Link href="/password-reset-request" className="text-sm text-primary hover:underline" data-testid="link-forgot-password">
                 Forgot password?
-              </a>
+              </Link>
             </div>
             
             <Button 
@@ -108,15 +108,6 @@ export default function Login() {
 
           <div className="mt-6 pt-6 border-t border-border">
             <div className="text-center space-y-3">
-              <p className="text-sm text-muted-foreground mb-3">Or sign in with</p>
-              <Button 
-                variant="secondary" 
-                className="w-full"
-                data-testid="button-ldap-auth"
-              >
-                <Building className="w-4 h-4 mr-2" />
-                LDAP Authentication
-              </Button>
               
               <div className="pt-3">
                 <p className="text-sm text-muted-foreground mb-3">Or browse without signing in</p>
@@ -134,13 +125,6 @@ export default function Login() {
             </div>
           </div>
 
-          <div className="mt-6 p-3 bg-muted/30 rounded-md">
-            <p className="text-xs text-muted-foreground text-center">
-              <strong>Demo Credentials:</strong><br />
-              Email: admin@example.com<br />
-              Password: admin123
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

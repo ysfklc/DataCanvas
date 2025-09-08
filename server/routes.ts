@@ -2,9 +2,11 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { authenticateUser, createDefaultAdmin, createTestLDAPConfig, createTestLDAPUser, searchLDAPUser, hashPassword, authenticateLDAP, testLDAPConnection } from "./auth";
-import { insertUserSchema, insertDashboardSchema, insertDataSourceSchema, insertDashboardCardSchema, insertSettingSchema } from "@shared/schema";
+import { insertUserSchema, insertDashboardSchema, insertDataSourceSchema, insertDashboardCardSchema, insertSettingSchema, insertPasswordResetTokenSchema } from "@shared/schema";
 import session from "express-session";
 import MemoryStore from "memorystore";
+import { nanoid } from "nanoid";
+import { sendTestEmail, sendPasswordResetEmail } from "./mail";
 
 const MemoryStoreSession = MemoryStore(session);
 
@@ -87,6 +89,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ user: req.session.user });
     } else {
       res.status(401).json({ message: "Not authenticated" });
+    }
+  });
+
+  // Password reset routes
+  app.post("/api/auth/password-reset-request", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Check if user exists
+      const user = await storage.getUserByEmail(email);
+      
+      // Always return success to prevent email enumeration
+      if (!user) {
+        return res.json({ message: "Password reset email sent if account exists" });
+      }
+
+      // Generate token and set expiration (30 minutes)
+      const token = nanoid(32);
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 30);
+
+      // Clean up expired tokens first
+      await storage.cleanupExpiredTokens();
+
+      // Create password reset token
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        token,
+        expiresAt,
+        isUsed: false,
+      });
+
+      // Send password reset email
+      try {
+        await sendPasswordResetEmail(user.email, token);
+        console.log(`Password reset email sent to ${email}`);
+      } catch (emailError) {
+        console.error("Failed to send password reset email:", emailError);
+        // Don't fail the request if email fails, just log it
+        // This prevents revealing whether an account exists or not
+      }
+
+      res.json({ message: "Password reset email sent if account exists" });
+    } catch (error) {
+      console.error("Password reset request error:", error);
+      res.status(500).json({ message: "Failed to process password reset request" });
+    }
+  });
+
+  app.get("/api/auth/verify-reset-token", async (req, res) => {
+    try {
+      const { token } = req.query;
+
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ message: "Token is required" });
+      }
+
+      const resetToken = await storage.getPasswordResetToken(token);
+
+      if (!resetToken) {
+        return res.status(404).json({ message: "Invalid or expired token" });
+      }
+
+      // Check if token is expired
+      if (new Date() > resetToken.expiresAt) {
+        return res.status(404).json({ message: "Token has expired" });
+      }
+
+      res.json({ message: "Token is valid" });
+    } catch (error) {
+      console.error("Token verification error:", error);
+      res.status(500).json({ message: "Failed to verify token" });
+    }
+  });
+
+  app.post("/api/auth/password-reset", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and password are required" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long" });
+      }
+
+      const resetToken = await storage.getPasswordResetToken(token);
+
+      if (!resetToken) {
+        return res.status(404).json({ message: "Invalid or expired token" });
+      }
+
+      // Check if token is expired
+      if (new Date() > resetToken.expiresAt) {
+        return res.status(404).json({ message: "Token has expired" });
+      }
+
+      // Mark token as used
+      await storage.markTokenAsUsed(resetToken.id);
+
+      // Update user's password
+      const hashedPassword = await hashPassword(password);
+      await storage.updateUser(resetToken.userId, { password: hashedPassword });
+
+      res.json({ message: "Password reset successful" });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  // Mail settings routes
+  app.post("/api/settings/test-mail", requireAdmin, async (req, res) => {
+    try {
+      const { config, testEmail } = req.body;
+
+      if (!config || !testEmail) {
+        return res.status(400).json({ message: "Configuration and test email are required" });
+      }
+
+      if (!config.enabled) {
+        return res.status(400).json({ message: "Mail configuration is disabled" });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(testEmail)) {
+        return res.status(400).json({ message: "Invalid email format" });
+      }
+
+      await sendTestEmail(config, testEmail);
+      res.json({ message: "Test email sent successfully" });
+    } catch (error) {
+      console.error("Mail test error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to send test email";
+      res.status(500).json({ message: errorMessage });
     }
   });
 
