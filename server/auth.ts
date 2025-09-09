@@ -61,13 +61,22 @@ interface LDAPConfig {
 export async function authenticateLDAP(username: string, password: string): Promise<boolean> {
   try {
     // Get LDAP configuration from settings
-    const ldapSettings = await storage.getSetting("ldap_config");
-    if (!ldapSettings) {
-      console.error("LDAP configuration not found");
+    const ldapSettings = await storage.getLdapSettings();
+    if (!ldapSettings || !ldapSettings.enabled) {
+      console.error("LDAP configuration not found or disabled");
       return false;
     }
 
-    const config = ldapSettings.value as LDAPConfig;
+    const config = {
+      url: ldapSettings.url,
+      baseDN: ldapSettings.baseDN,
+      bindDN: ldapSettings.bindDN,
+      bindCredentials: ldapSettings.bindCredentials,
+      searchFilter: ldapSettings.searchFilter,
+      tlsOptions: {
+        rejectUnauthorized: ldapSettings.tlsRejectUnauthorized,
+      },
+    };
     const client = ldap.createClient({
       url: config.url,
       tlsOptions: config.tlsOptions || { rejectUnauthorized: false },
@@ -170,39 +179,42 @@ export async function createDefaultAdmin(): Promise<void> {
 }
 
 export async function createTestLDAPConfig(): Promise<void> {
-  const existingConfig = await storage.getSetting("ldap_config");
+  const existingConfig = await storage.getLdapSettings();
   if (existingConfig) {
     return;
   }
 
   // Create test LDAP configuration
-  const testLDAPConfig: LDAPConfig = {
+  await storage.createLdapSettings({
     url: "ldap://localhost:389",
     baseDN: "dc=example,dc=com",
     bindDN: "cn=admin,dc=example,dc=com",
     bindCredentials: "admin",
     searchFilter: "(uid={username})",
-    tlsOptions: {
-      rejectUnauthorized: false,
-    },
-  };
-
-  await storage.setSetting({
-    key: "ldap_config",
-    value: testLDAPConfig,
+    tlsRejectUnauthorized: false,
+    enabled: false, // Default to disabled for security
   });
 }
 
 export async function searchLDAPUser(username: string): Promise<any | null> {
   try {
     // Get LDAP configuration from settings
-    const ldapSettings = await storage.getSetting("ldap_config");
-    if (!ldapSettings) {
-      console.error("LDAP configuration not found");
+    const ldapSettings = await storage.getLdapSettings();
+    if (!ldapSettings || !ldapSettings.enabled) {
+      console.error("LDAP configuration not found or disabled");
       return null;
     }
 
-    const config = ldapSettings.value as LDAPConfig;
+    const config = {
+      url: ldapSettings.url,
+      baseDN: ldapSettings.baseDN,
+      bindDN: ldapSettings.bindDN,
+      bindCredentials: ldapSettings.bindCredentials,
+      searchFilter: ldapSettings.searchFilter,
+      tlsOptions: {
+        rejectUnauthorized: ldapSettings.tlsRejectUnauthorized,
+      },
+    };
     console.log(`LDAP search for user: ${username}`);
     console.log(`LDAP config - URL: ${config.url}, baseDN: ${config.baseDN}, searchFilter: ${config.searchFilter}`);
     

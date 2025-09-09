@@ -1,7 +1,8 @@
 import nodemailer from "nodemailer";
 import { storage } from "./storage";
+import type { MailSettings } from "@shared/schema";
 
-interface MailSettings {
+interface MailConfig {
   host: string;
   port: number;
   secure: boolean;
@@ -13,15 +14,27 @@ interface MailSettings {
   enabled: boolean;
 }
 
-export async function getMailSettings(): Promise<MailSettings | null> {
-  const setting = await storage.getSetting("mail_config");
-  if (!setting?.value) {
+export async function getMailSettings(): Promise<MailConfig | null> {
+  const dbSettings = await storage.getMailSettings();
+  if (!dbSettings || !dbSettings.enabled) {
     return null;
   }
-  return setting.value as MailSettings;
+  
+  // Transform database format to expected interface format
+  return {
+    host: dbSettings.host,
+    port: dbSettings.port,
+    secure: dbSettings.secure,
+    auth: {
+      user: dbSettings.authUser,
+      pass: dbSettings.authPass,
+    },
+    from: dbSettings.fromAddress,
+    enabled: dbSettings.enabled,
+  };
 }
 
-export async function sendTestEmail(config: MailSettings, testEmail: string): Promise<boolean> {
+export async function sendTestEmail(config: MailConfig, testEmail: string): Promise<boolean> {
   if (!config.enabled) {
     throw new Error("Mail service is not enabled");
   }

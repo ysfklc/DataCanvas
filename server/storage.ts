@@ -1,14 +1,64 @@
 import { 
-  users, dashboards, dataSources, dashboardCards, settings, passwordResetTokens,
+  users, dashboards, dataSources, dashboardCards, settings, passwordResetTokens, ldapSettings, mailSettings,
   type User, type InsertUser, 
   type Dashboard, type InsertDashboard,
   type DataSource, type InsertDataSource,
   type DashboardCard, type InsertDashboardCard,
   type Setting, type InsertSetting,
+  type LdapSettings, type InsertLdapSettings,
+  type MailSettings, type InsertMailSettings,
   type PasswordResetToken, type InsertPasswordResetToken
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, lt } from "drizzle-orm";
+import crypto from "crypto";
+
+// Encryption functions for settings passwords (using symmetric encryption)
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'fallback-key-32-chars-long-12345';
+const ALGORITHM = 'aes-256-cbc';
+
+function encryptPassword(password: string): string {
+  if (!password || password.trim() === "") {
+    return "";
+  }
+  
+  const iv = crypto.randomBytes(16);
+  const key = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  
+  let encrypted = cipher.update(password, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  // Combine IV and encrypted data
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decryptPassword(encryptedPassword: string): string {
+  if (!encryptedPassword || encryptedPassword.trim() === "") {
+    return "";
+  }
+  
+  try {
+    const parts = encryptedPassword.split(':');
+    if (parts.length !== 2) {
+      return encryptedPassword; // Return as-is if not encrypted format (backward compatibility)
+    }
+    
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const key = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+    
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+  } catch (error) {
+    console.error('Failed to decrypt password:', error);
+    return encryptedPassword; // Return as-is if decryption fails (backward compatibility)
+  }
+}
 
 export interface IStorage {
   // Users
@@ -47,6 +97,16 @@ export interface IStorage {
   getSetting(key: string): Promise<Setting | undefined>;
   getAllSettings(): Promise<Setting[]>;
   setSetting(setting: InsertSetting): Promise<Setting>;
+  
+  // LDAP Settings
+  getLdapSettings(): Promise<LdapSettings | undefined>;
+  createLdapSettings(settings: InsertLdapSettings): Promise<LdapSettings>;
+  updateLdapSettings(settings: Partial<InsertLdapSettings>): Promise<LdapSettings>;
+  
+  // Mail Settings
+  getMailSettings(): Promise<MailSettings | undefined>;
+  createMailSettings(settings: InsertMailSettings): Promise<MailSettings>;
+  updateMailSettings(settings: Partial<InsertMailSettings>): Promise<MailSettings>;
   
   // Password Reset Tokens
   createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
@@ -193,6 +253,126 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return setting;
+  }
+
+  // LDAP Settings
+  async getLdapSettings(): Promise<LdapSettings | undefined> {
+    const [setting] = await db.select().from(ldapSettings).limit(1);
+    if (setting && setting.bindCredentials) {
+      // Decrypt the password when retrieving
+      setting.bindCredentials = decryptPassword(setting.bindCredentials);
+    }
+    return setting || undefined;
+  }
+
+  async createLdapSettings(insertLdapSettings: InsertLdapSettings): Promise<LdapSettings> {
+    // Delete any existing records to enforce single record constraint
+    await db.delete(ldapSettings);
+    
+    // Encrypt password before storing
+    if (insertLdapSettings.bindCredentials) {
+      insertLdapSettings.bindCredentials = encryptPassword(insertLdapSettings.bindCredentials);
+    }
+    
+    const [setting] = await db.insert(ldapSettings).values(insertLdapSettings).returning();
+    
+    // Decrypt password before returning
+    if (setting.bindCredentials) {
+      setting.bindCredentials = decryptPassword(setting.bindCredentials);
+    }
+    
+    return setting;
+  }
+
+  async updateLdapSettings(updateLdapSettings: Partial<InsertLdapSettings>): Promise<LdapSettings> {
+    // Encrypt password if provided
+    if (updateLdapSettings.bindCredentials) {
+      updateLdapSettings.bindCredentials = encryptPassword(updateLdapSettings.bindCredentials);
+    }
+    
+    // First, check if any LDAP settings exist
+    const existing = await db.select().from(ldapSettings).limit(1);
+    
+    if (existing.length > 0) {
+      // Update existing record
+      const [setting] = await db.update(ldapSettings)
+        .set({
+          ...updateLdapSettings,
+          updatedAt: new Date(),
+        })
+        .where(eq(ldapSettings.id, existing[0].id))
+        .returning();
+      
+      // Decrypt password before returning
+      if (setting.bindCredentials) {
+        setting.bindCredentials = decryptPassword(setting.bindCredentials);
+      }
+      
+      return setting;
+    } else {
+      // Create new record if none exists
+      return await this.createLdapSettings(updateLdapSettings as InsertLdapSettings);
+    }
+  }
+
+  // Mail Settings
+  async getMailSettings(): Promise<MailSettings | undefined> {
+    const [setting] = await db.select().from(mailSettings).limit(1);
+    if (setting && setting.authPass) {
+      // Decrypt the password when retrieving
+      setting.authPass = decryptPassword(setting.authPass);
+    }
+    return setting || undefined;
+  }
+
+  async createMailSettings(insertMailSettings: InsertMailSettings): Promise<MailSettings> {
+    // Delete any existing records to enforce single record constraint
+    await db.delete(mailSettings);
+    
+    // Encrypt password before storing
+    if (insertMailSettings.authPass) {
+      insertMailSettings.authPass = encryptPassword(insertMailSettings.authPass);
+    }
+    
+    const [setting] = await db.insert(mailSettings).values(insertMailSettings).returning();
+    
+    // Decrypt password before returning
+    if (setting.authPass) {
+      setting.authPass = decryptPassword(setting.authPass);
+    }
+    
+    return setting;
+  }
+
+  async updateMailSettings(updateMailSettings: Partial<InsertMailSettings>): Promise<MailSettings> {
+    // Encrypt password if provided
+    if (updateMailSettings.authPass) {
+      updateMailSettings.authPass = encryptPassword(updateMailSettings.authPass);
+    }
+    
+    // First, check if any mail settings exist
+    const existing = await db.select().from(mailSettings).limit(1);
+    
+    if (existing.length > 0) {
+      // Update existing record
+      const [setting] = await db.update(mailSettings)
+        .set({
+          ...updateMailSettings,
+          updatedAt: new Date(),
+        })
+        .where(eq(mailSettings.id, existing[0].id))
+        .returning();
+      
+      // Decrypt password before returning
+      if (setting.authPass) {
+        setting.authPass = decryptPassword(setting.authPass);
+      }
+      
+      return setting;
+    } else {
+      // Create new record if none exists
+      return await this.createMailSettings(updateMailSettings as InsertMailSettings);
+    }
   }
 
   // Password Reset Tokens

@@ -86,22 +86,61 @@ export default function SettingsPage() {
   const [mailTestStatus, setMailTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [mailTestMessage, setMailTestMessage] = useState('');
 
+  // Fetch LDAP settings from dedicated endpoint
+  const { data: ldapSettingsData } = useQuery({
+    queryKey: ["/api/settings/ldap"],
+  });
+
+  // Fetch Mail settings from dedicated endpoint
+  const { data: mailSettingsData } = useQuery({
+    queryKey: ["/api/settings/mail"],
+  });
+
+  // Fetch general settings (for access settings)
   const { data: settings = [], isLoading } = useQuery({
     queryKey: ["/api/settings"],
   });
 
-  // Parse settings when data changes
+  // Update LDAP settings when data changes
+  useState(() => {
+    if (ldapSettingsData && typeof ldapSettingsData === 'object') {
+      setLdapSettings({
+        url: (ldapSettingsData as any).url || "",
+        baseDN: (ldapSettingsData as any).baseDN || "",
+        bindDN: (ldapSettingsData as any).bindDN || "",
+        bindCredentials: (ldapSettingsData as any).bindCredentials || "",
+        searchFilter: (ldapSettingsData as any).searchFilter || "",
+        tlsOptions: {
+          rejectUnauthorized: (ldapSettingsData as any).tlsRejectUnauthorized || false,
+        },
+      });
+      setLdapEnabled((ldapSettingsData as any).enabled || false);
+    }
+  });
+
+  // Update Mail settings when data changes
+  useState(() => {
+    if (mailSettingsData && typeof mailSettingsData === 'object') {
+      setMailSettings({
+        host: (mailSettingsData as any).host || "",
+        port: (mailSettingsData as any).port || 587,
+        secure: (mailSettingsData as any).secure || false,
+        auth: {
+          user: (mailSettingsData as any).authUser || "",
+          pass: (mailSettingsData as any).authPass || "",
+        },
+        from: (mailSettingsData as any).fromAddress || "",
+        enabled: (mailSettingsData as any).enabled || false,
+      });
+    }
+  });
+
+  // Parse general settings when data changes (for access settings)
   useState(() => {
     if (settings && Array.isArray(settings)) {
       (settings as any[]).forEach((setting: any) => {
-        if (setting.key === "ldap_config") {
-          setLdapSettings(setting.value);
-        } else if (setting.key === "ldap_enabled") {
-          setLdapEnabled(!!setting.value);
-        } else if (setting.key === "access") {
+        if (setting.key === "access") {
           setAccessSettings(setting.value);
-        } else if (setting.key === "mail_config") {
-          setMailSettings(setting.value);
         }
       });
     }
@@ -138,16 +177,24 @@ export default function SettingsPage() {
 
   const saveLdapMutation = useMutation({
     mutationFn: async (settings: LDAPSettings) => {
-      // Save both LDAP config and enabled status
-      await apiRequest("POST", "/api/settings", { key: "ldap_config", value: settings });
-      await apiRequest("POST", "/api/settings", { key: "ldap_enabled", value: ldapEnabled });
+      // Transform frontend format to backend format
+      const dbFormat = {
+        url: settings.url,
+        baseDN: settings.baseDN,
+        bindDN: settings.bindDN,
+        bindCredentials: settings.bindCredentials,
+        searchFilter: settings.searchFilter,
+        tlsRejectUnauthorized: settings.tlsOptions.rejectUnauthorized,
+        enabled: ldapEnabled,
+      };
+      return await apiRequest("POST", "/api/settings/ldap", dbFormat);
     },
     onSuccess: () => {
       toast({
         title: "LDAP settings saved",
         description: "LDAP configuration has been updated successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/ldap"] });
     },
     onError: () => {
       toast({
@@ -207,14 +254,25 @@ export default function SettingsPage() {
   });
 
   const saveMailMutation = useMutation({
-    mutationFn: (settings: MailSettings) =>
-      apiRequest("POST", "/api/settings", { key: "mail_config", value: settings }),
+    mutationFn: (settings: MailSettings) => {
+      // Transform frontend format to backend format
+      const dbFormat = {
+        host: settings.host,
+        port: settings.port,
+        secure: settings.secure,
+        authUser: settings.auth.user,
+        authPass: settings.auth.pass,
+        fromAddress: settings.from,
+        enabled: settings.enabled,
+      };
+      return apiRequest("POST", "/api/settings/mail", dbFormat);
+    },
     onSuccess: () => {
       toast({
         title: "Mail settings saved",
         description: "Email configuration has been updated successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/mail"] });
     },
     onError: () => {
       toast({
@@ -245,13 +303,22 @@ export default function SettingsPage() {
     // If LDAP is disabled, save the disabled state and deactivate LDAP users
     if (!ldapEnabled) {
       try {
-        await apiRequest("POST", "/api/settings", { key: "ldap_enabled", value: false });
+        const dbFormat = {
+          url: ldapSettings.url,
+          baseDN: ldapSettings.baseDN,
+          bindDN: ldapSettings.bindDN,
+          bindCredentials: ldapSettings.bindCredentials,
+          searchFilter: ldapSettings.searchFilter,
+          tlsRejectUnauthorized: ldapSettings.tlsOptions.rejectUnauthorized,
+          enabled: false,
+        };
+        await apiRequest("POST", "/api/settings/ldap", dbFormat);
         await apiRequest("POST", "/api/users/deactivate-ldap");
         toast({
           title: "LDAP settings saved",
           description: "LDAP authentication has been disabled and LDAP users have been deactivated.",
         });
-        queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/settings/ldap"] });
         queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       } catch (error) {
         toast({

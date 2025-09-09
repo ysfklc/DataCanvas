@@ -57,6 +57,32 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const ldapSettings = pgTable("ldap_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  url: varchar("url", { length: 500 }).notNull().default("ldap://localhost:389"),
+  baseDN: varchar("base_dn", { length: 500 }).notNull().default("ou=users,dc=example,dc=com"),
+  bindDN: varchar("bind_dn", { length: 500 }),
+  bindCredentials: text("bind_credentials"),
+  searchFilter: varchar("search_filter", { length: 255 }).notNull().default("(uid={username})"),
+  tlsRejectUnauthorized: boolean("tls_reject_unauthorized").notNull().default(false),
+  enabled: boolean("enabled").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const mailSettings = pgTable("mail_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  host: varchar("host", { length: 255 }).notNull().default("smtp.gmail.com"),
+  port: integer("port").notNull().default(587),
+  secure: boolean("secure").notNull().default(false),
+  authUser: varchar("auth_user", { length: 255 }).notNull().default(""),
+  authPass: text("auth_pass").notNull().default(""),
+  fromAddress: varchar("from_address", { length: 255 }).notNull().default(""),
+  enabled: boolean("enabled").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -134,6 +160,18 @@ export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTo
   createdAt: true,
 });
 
+export const insertLdapSettingsSchema = createInsertSchema(ldapSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMailSettingsSchema = createInsertSchema(mailSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -145,5 +183,9 @@ export type DashboardCard = typeof dashboardCards.$inferSelect;
 export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
+export type LdapSettings = typeof ldapSettings.$inferSelect;
+export type InsertLdapSettings = z.infer<typeof insertLdapSettingsSchema>;
+export type MailSettings = typeof mailSettings.$inferSelect;
+export type InsertMailSettings = z.infer<typeof insertMailSettingsSchema>;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;

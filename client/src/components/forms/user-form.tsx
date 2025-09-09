@@ -30,11 +30,11 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const [ldapUserInfo, setLdapUserInfo] = useState<any>(null);
   
   // Check if LDAP is enabled
-  const { data: settings = [] } = useQuery({
-    queryKey: ["/api/settings"],
+  const { data: ldapSettings } = useQuery({
+    queryKey: ["/api/settings/ldap"],
   });
   
-  const ldapEnabled = (settings as any[]).find((s: any) => s.key === "ldap_enabled")?.value || false;
+  const ldapEnabled = ldapSettings?.enabled || false;
   
   const { toast } = useToast();
   const queryClient = useQueryClient();

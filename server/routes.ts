@@ -826,6 +826,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // LDAP Settings endpoints
+  app.get("/api/settings/ldap", requireAdmin, async (req, res) => {
+    try {
+      const ldapSettings = await storage.getLdapSettings();
+      if (!ldapSettings) {
+        return res.json({
+          url: "ldap://localhost:389",
+          baseDN: "ou=users,dc=example,dc=com",
+          bindDN: "",
+          bindCredentials: "",
+          searchFilter: "(uid={username})",
+          tlsRejectUnauthorized: false,
+          enabled: false
+        });
+      }
+      res.json(ldapSettings);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch LDAP settings" });
+    }
+  });
+
+  app.post("/api/settings/ldap", requireAdmin, async (req, res) => {
+    try {
+      const ldapSettings = await storage.updateLdapSettings(req.body);
+      res.json(ldapSettings);
+    } catch (error) {
+      console.error("Failed to save LDAP settings:", error);
+      res.status(400).json({ message: "Failed to save LDAP settings" });
+    }
+  });
+
+  // Mail Settings endpoints
+  app.get("/api/settings/mail", requireAdmin, async (req, res) => {
+    try {
+      const mailSettings = await storage.getMailSettings();
+      if (!mailSettings) {
+        return res.json({
+          host: "smtp.gmail.com",
+          port: 587,
+          secure: false,
+          authUser: "",
+          authPass: "",
+          fromAddress: "",
+          enabled: false
+        });
+      }
+      res.json(mailSettings);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch mail settings" });
+    }
+  });
+
+  app.post("/api/settings/mail", requireAdmin, async (req, res) => {
+    try {
+      const mailSettings = await storage.updateMailSettings(req.body);
+      res.json(mailSettings);
+    } catch (error) {
+      console.error("Failed to save mail settings:", error);
+      res.status(400).json({ message: "Failed to save mail settings" });
+    }
+  });
+
   // LDAP user search endpoint
   app.get("/api/auth/search-ldap/:username", requireAdmin, async (req, res) => {
     try {
