@@ -26,7 +26,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize default admin user and test LDAP configuration
   await createDefaultAdmin();
   await createTestLDAPConfig();
-  await createTestLDAPUser();
 
   // Session configuration
   app.use(session({
@@ -329,7 +328,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dashboards = await storage.getDashboardsByUser(user.id);
       }
       
-      res.json(dashboards);
+      // Add card count to each dashboard
+      const dashboardsWithCardCount = await Promise.all(
+        dashboards.map(async (dashboard) => {
+          const cards = await storage.getCardsByDashboard(dashboard.id);
+          return {
+            ...dashboard,
+            cardCount: cards.length
+          };
+        })
+      );
+      
+      res.json(dashboardsWithCardCount);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch dashboards" });
     }
@@ -359,7 +369,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/public/dashboards", async (req, res) => {
     try {
       const dashboards = await storage.getPublicDashboards();
-      res.json(dashboards);
+      
+      // Add card count to each dashboard
+      const dashboardsWithCardCount = await Promise.all(
+        dashboards.map(async (dashboard) => {
+          const cards = await storage.getCardsByDashboard(dashboard.id);
+          return {
+            ...dashboard,
+            cardCount: cards.length
+          };
+        })
+      );
+      
+      res.json(dashboardsWithCardCount);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch public dashboards" });
     }
@@ -610,9 +632,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           });
           
-          let userInfo = null;
-          if (userResponse.ok) {
-            userInfo = await userResponse.json();
+          // Validate that user authentication actually worked
+          if (!userResponse.ok) {
+            throw new Error(`JIRA user authentication failed: ${userResponse.status} ${userResponse.statusText}`);
+          }
+          
+          const userInfo = await userResponse.json();
+          
+          // Ensure we got valid user data back
+          if (!userInfo || !userInfo.accountId) {
+            throw new Error('JIRA authentication failed: Invalid or empty user data returned');
+          }
+          
+          // Validate projects array exists and is valid
+          if (!Array.isArray(projects)) {
+            throw new Error('JIRA authentication failed: Invalid projects data returned');
           }
           
           res.json({
@@ -624,11 +658,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               id: project.id,
               projectTypeKey: project.projectTypeKey
             })),
-            user: userInfo ? {
+            user: {
               displayName: userInfo.displayName,
               emailAddress: userInfo.emailAddress,
               accountId: userInfo.accountId
-            } : null,
+            },
             jiraUrl: baseUrl
           });
         } catch (error: any) {

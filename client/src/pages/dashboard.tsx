@@ -278,7 +278,9 @@ export default function DashboardPage() {
                     {dashboard.description || "No description"}
                   </p>
                   <div className="flex items-center justify-between text-sm mb-3">
-                    <span className="text-muted-foreground">0 cards</span>
+                    <span className="text-muted-foreground">
+                      {(dashboard as any).cardCount || 0} {(dashboard as any).cardCount === 1 ? 'card' : 'cards'}
+                    </span>
                     <span className="text-muted-foreground">
                       {new Date(dashboard.updatedAt).toLocaleDateString()}
                     </span>

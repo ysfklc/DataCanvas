@@ -92,41 +92,59 @@ export function ChartRenderer({ type, config, dataSourceId }: ChartRendererProps
   switch (type) {
     case "table":
       return (
-        <div className="h-full bg-muted/50 rounded-md overflow-auto">
-          {data?.data?.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {data.fields?.map((field: string) => {
-                    const displayName = data.fieldDisplayNames?.[field] || field;
-                    return (
-                      <TableHead key={field}>{displayName}</TableHead>
-                    );
-                  })}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.data.map((row: any, index: number) => (
-                  <TableRow key={index}>
-                    {data.fields?.map((field: string) => {
-                      const value = row[field];
-                      let displayValue = value;
-                      
-                      // Handle nested objects by converting to string
-                      if (typeof value === 'object' && value !== null) {
-                        displayValue = JSON.stringify(value);
-                      } else if (value === null || value === undefined) {
-                        displayValue = '';
-                      }
-                      
+        <div className="h-full bg-muted/50 rounded-md">
+          {(data as any)?.data?.length > 0 ? (
+            <div 
+              className="h-full overflow-auto scrollbar-thin scrollbar-track-muted scrollbar-thumb-muted-foreground"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))'
+              }}
+            >
+              <table className="border-collapse" style={{ minWidth: 'max-content' }}>
+                <thead className="[&_tr]:border-b sticky top-0 bg-muted/50">
+                  <tr className="border-b transition-colors hover:bg-muted/50">
+                    {(data as any).fields?.map((field: string) => {
+                      const displayName = (data as any).fieldDisplayNames?.[field] || field;
                       return (
-                        <TableCell key={field}>{String(displayValue)}</TableCell>
+                        <th 
+                          key={field}
+                          className="h-8 px-4 text-left align-middle font-medium text-muted-foreground whitespace-nowrap min-w-[120px]"
+                        >
+                          {displayName}
+                        </th>
                       );
                     })}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                  </tr>
+                </thead>
+                <tbody className="[&_tr:last-child]:border-0">
+                  {(data as any).data.map((row: any, index: number) => (
+                    <tr key={index} className="border-b transition-colors hover:bg-muted/50">
+                      {(data as any).fields?.map((field: string) => {
+                        const value = row[field];
+                        let displayValue = value;
+                        
+                        // Handle nested objects by converting to string
+                        if (typeof value === 'object' && value !== null) {
+                          displayValue = JSON.stringify(value);
+                        } else if (value === null || value === undefined) {
+                          displayValue = '';
+                        }
+                        
+                        return (
+                          <td 
+                            key={field}
+                            className="p-4 align-middle whitespace-nowrap text-sm min-w-[120px]"
+                          >
+                            {String(displayValue)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -141,9 +159,9 @@ export function ChartRenderer({ type, config, dataSourceId }: ChartRendererProps
     case "chart":
       return (
         <div className="h-full bg-muted/50 rounded-md p-2">
-          {data?.data?.length > 0 ? (
+          {(data as any)?.data?.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.data}>
+              <BarChart data={(data as any).data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" fontSize={12} />
                 <YAxis fontSize={12} />
@@ -165,9 +183,9 @@ export function ChartRenderer({ type, config, dataSourceId }: ChartRendererProps
     case "graph":
       return (
         <div className="h-full bg-muted/50 rounded-md p-2">
-          {data?.data?.length > 0 ? (
+          {(data as any)?.data?.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.data}>
+              <LineChart data={(data as any).data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" fontSize={12} />
                 <YAxis fontSize={12} />
