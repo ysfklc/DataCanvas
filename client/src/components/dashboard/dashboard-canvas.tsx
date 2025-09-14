@@ -209,6 +209,13 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
+              <div className="w-6 h-6 rounded overflow-hidden flex items-center justify-center mr-2">
+                <img 
+                  src={dashboard.logoUrl || "/uploads/logos/default-dashboard-logo.jpg"} 
+                  alt={dashboard.logoUrl ? `${dashboard.name} logo` : "Default dashboard logo"}
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-semibold text-foreground" data-testid="text-dashboard-name">
                 {dashboard.name}
               </h3>

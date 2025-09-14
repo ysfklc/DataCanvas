@@ -20,6 +20,7 @@ export const dashboards = pgTable("dashboards", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
+  logoUrl: varchar("logo_url", { length: 500 }),
   ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   accessLevel: varchar("access_level", { length: 50 }).notNull().default("private"),
   isPublic: boolean("is_public").notNull().default(false),
@@ -138,6 +139,11 @@ export const insertDashboardSchema = createInsertSchema(dashboards).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+// Partial update schema for dashboard updates that allows explicit null for logo removal
+export const updateDashboardSchema = insertDashboardSchema.partial().extend({
+  logoUrl: z.string().nullable().optional(),
 });
 
 export const insertDataSourceSchema = createInsertSchema(dataSources).omit({

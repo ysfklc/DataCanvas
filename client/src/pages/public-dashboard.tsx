@@ -56,8 +56,12 @@ export default function PublicDashboardPage() {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center p-4">
           <div className="flex items-center space-x-4">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-              <BarChart3 className="text-primary w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
+              <img 
+                src={(dashboard as Dashboard).logoUrl || "/uploads/logos/default-dashboard-logo.jpg"} 
+                alt={(dashboard as Dashboard).logoUrl ? `${(dashboard as Dashboard).name} logo` : "Default dashboard logo"}
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <h1 className="text-xl font-semibold">{(dashboard as Dashboard).name}</h1>

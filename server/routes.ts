@@ -2,11 +2,14 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { authenticateUser, createDefaultAdmin, createTestLDAPConfig, createTestLDAPUser, searchLDAPUser, hashPassword, authenticateLDAP, testLDAPConnection } from "./auth";
-import { insertUserSchema, insertDashboardSchema, insertDataSourceSchema, insertDashboardCardSchema, insertSettingSchema, insertPasswordResetTokenSchema } from "@shared/schema";
+import { insertUserSchema, insertDashboardSchema, updateDashboardSchema, insertDataSourceSchema, insertDashboardCardSchema, insertSettingSchema, insertPasswordResetTokenSchema } from "@shared/schema";
 import session from "express-session";
 import MemoryStore from "memorystore";
 import { nanoid } from "nanoid";
 import { sendTestEmail, sendPasswordResetEmail } from "./mail";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 const MemoryStoreSession = MemoryStore(session);
 
@@ -39,6 +42,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: 'lax', // CSRF protection
     },
   }));
 
@@ -56,6 +60,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next();
   };
+
+  // Ensure upload directory exists
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "logos");
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  // Configure multer for logo uploads
+  const storage_multer = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+    }
+  });
+
+  const upload = multer({
+    storage: storage_multer,
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (allowedMimes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
+      }
+    }
+  });
+
+  // Logo upload endpoint
+  app.post("/api/upload/logo", requireAuth, upload.single('logo'), (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const logoUrl = `/uploads/logos/${req.file.filename}`;
+      res.json({ 
+        message: "Logo uploaded successfully",
+        logoUrl: logoUrl
+      });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to upload logo" });
+    }
+  });
 
   // Auth routes
   app.post("/api/auth/login", async (req, res) => {
@@ -645,9 +698,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const updatedDashboard = await storage.updateDashboard(id, req.body);
+      // Validate request body using updateDashboardSchema
+      const updateData = updateDashboardSchema.parse(req.body);
+      const updatedDashboard = await storage.updateDashboard(id, updateData);
       res.json(updatedDashboard);
     } catch (error) {
+      console.error("Dashboard update error:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid request data", details: error.message });
+      }
       res.status(400).json({ message: "Failed to update dashboard" });
     }
   });

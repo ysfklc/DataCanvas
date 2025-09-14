@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/top-bar";
 import { DashboardCanvas } from "@/components/dashboard/dashboard-canvas";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BarChart3, Users, Server, Edit, Trash2, Globe, Lock, Copy, ExternalLink } from "lucide-react";
+import { BarChart3, Users, Server, Edit, Trash2, Globe, Lock, Copy, ExternalLink, Upload, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,6 +21,10 @@ export default function DashboardPage() {
   const [editingDashboard, setEditingDashboard] = useState<Dashboard | null>(null);
   const [dashboardName, setDashboardName] = useState("");
   const [dashboardDescription, setDashboardDescription] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [shouldRemoveLogo, setShouldRemoveLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -29,8 +33,40 @@ export default function DashboardPage() {
     queryKey: ["/api/dashboards"],
   });
 
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('logo', file);
+      const res = await fetch('/api/upload/logo', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.text();
+        let errorMessage = "Failed to upload logo";
+        try {
+          const jsonError = JSON.parse(errorData);
+          errorMessage = jsonError.message || errorMessage;
+        } catch {
+          errorMessage = errorData || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      return res.json();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to upload logo",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const createDashboardMutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) =>
+    mutationFn: (data: { name: string; description?: string; logoUrl?: string }) =>
       apiRequest("POST", "/api/dashboards", data),
     onSuccess: () => {
       toast({
@@ -41,6 +77,9 @@ export default function DashboardPage() {
       setIsCreateDialogOpen(false);
       setDashboardName("");
       setDashboardDescription("");
+      setLogoFile(null);
+      setLogoPreview(null);
+      setShouldRemoveLogo(false);
     },
     onError: () => {
       toast({
@@ -52,7 +91,7 @@ export default function DashboardPage() {
   });
 
   const updateDashboardMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name: string; description?: string; isPublic?: boolean } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { name: string; description?: string; isPublic?: boolean; logoUrl?: string | null } }) =>
       apiRequest("PUT", `/api/dashboards/${id}`, data),
     onSuccess: () => {
       toast({
@@ -64,6 +103,9 @@ export default function DashboardPage() {
       setEditingDashboard(null);
       setDashboardName("");
       setDashboardDescription("");
+      setLogoFile(null);
+      setLogoPreview(null);
+      setShouldRemoveLogo(false);
     },
     onError: () => {
       toast({
@@ -123,7 +165,29 @@ export default function DashboardPage() {
     setSelectedDashboard(null);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLogoFile(file);
+      setShouldRemoveLogo(false); // Reset removal flag when new logo is selected
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setLogoPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    setShouldRemoveLogo(true);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dashboardName.trim()) {
       toast({
@@ -133,13 +197,28 @@ export default function DashboardPage() {
       });
       return;
     }
-    createDashboardMutation.mutate({
-      name: dashboardName.trim(),
-      description: dashboardDescription.trim() || undefined,
-    });
+
+    try {
+      let logoUrl: string | undefined;
+      
+      // Upload logo first if a file is selected
+      if (logoFile) {
+        const logoResponse = await uploadLogoMutation.mutateAsync(logoFile);
+        logoUrl = logoResponse.logoUrl;
+      }
+
+      // Create dashboard with logo URL
+      createDashboardMutation.mutate({
+        name: dashboardName.trim(),
+        description: dashboardDescription.trim() || undefined,
+        logoUrl,
+      });
+    } catch (error) {
+      // Error is already handled by uploadLogoMutation onError
+    }
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDashboard || !dashboardName.trim()) {
       toast({
@@ -149,19 +228,41 @@ export default function DashboardPage() {
       });
       return;
     }
-    updateDashboardMutation.mutate({
-      id: editingDashboard.id,
-      data: {
-        name: dashboardName.trim(),
-        description: dashboardDescription.trim() || undefined,
-      },
-    });
+
+    try {
+      let logoUrl: string | null | undefined = editingDashboard.logoUrl;
+      
+      // Check if user wants to remove existing logo
+      if (shouldRemoveLogo) {
+        logoUrl = null;
+      }
+      // Upload new logo if a file is selected
+      else if (logoFile) {
+        const logoResponse = await uploadLogoMutation.mutateAsync(logoFile);
+        logoUrl = logoResponse.logoUrl;
+      }
+
+      // Update dashboard with logo URL
+      updateDashboardMutation.mutate({
+        id: editingDashboard.id,
+        data: {
+          name: dashboardName.trim(),
+          description: dashboardDescription.trim() || undefined,
+          logoUrl,
+        },
+      });
+    } catch (error) {
+      // Error is already handled by uploadLogoMutation onError
+    }
   };
 
   const handleEditDashboard = (dashboard: Dashboard) => {
     setEditingDashboard(dashboard);
     setDashboardName(dashboard.name);
     setDashboardDescription(dashboard.description || "");
+    setLogoFile(null);
+    setLogoPreview(dashboard.logoUrl || null);
+    setShouldRemoveLogo(false);
     setIsEditDialogOpen(true);
   };
 
@@ -384,6 +485,57 @@ export default function DashboardPage() {
                 data-testid="textarea-dashboard-description"
               />
             </div>
+            <div className="space-y-2">
+              <Label>Dashboard Logo</Label>
+              <div className="flex items-center space-x-4">
+                <div className="flex-shrink-0">
+                  {logoPreview ? (
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border">
+                      <img 
+                        src={logoPreview} 
+                        alt="Logo preview" 
+                        className="w-full h-full object-cover" 
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-0 right-0 h-6 w-6 p-0 bg-background/80 hover:bg-background text-foreground"
+                        onClick={handleRemoveLogo}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg border border-dashed border-muted-foreground/50 flex items-center justify-center bg-muted/20">
+                      <Upload className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                    className="hidden"
+                    id="logo-upload"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mb-2"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Choose Logo
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a logo image (JPG, PNG, GIF, WebP, max 5MB)
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="flex space-x-3 pt-4">
               <Button 
                 type="button" 
@@ -433,6 +585,57 @@ export default function DashboardPage() {
                 onChange={(e) => setDashboardDescription(e.target.value)}
                 data-testid="textarea-edit-dashboard-description"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Dashboard Logo</Label>
+              <div className="flex items-center space-x-4">
+                <div className="flex-shrink-0">
+                  {logoPreview ? (
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border">
+                      <img 
+                        src={logoPreview} 
+                        alt="Logo preview" 
+                        className="w-full h-full object-cover" 
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-0 right-0 h-6 w-6 p-0 bg-background/80 hover:bg-background text-foreground"
+                        onClick={handleRemoveLogo}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg border border-dashed border-muted-foreground/50 flex items-center justify-center bg-muted/20">
+                      <Upload className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                    className="hidden"
+                    id="edit-logo-upload"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mb-2"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {logoPreview ? 'Change Logo' : 'Choose Logo'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a logo image (JPG, PNG, GIF, WebP, max 5MB)
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="flex space-x-3 pt-4">
               <Button 
