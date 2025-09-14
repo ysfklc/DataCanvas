@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardCard } from "./dashboard-card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Save, BarChart3, Table, TrendingUp } from "lucide-react";
+import { ArrowLeft, Plus, Save, BarChart3, Table, TrendingUp, Ban } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Dashboard, DashboardCard as DashboardCardType, DataSource } from "@shared/schema";
@@ -24,7 +24,10 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
   const [cardTitle, setCardTitle] = useState("");
   const [selectedDataSource, setSelectedDataSource] = useState("");
   const [selectedVisualizationType, setSelectedVisualizationType] = useState("");
+  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
+  const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const innerCanvasRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -108,10 +111,12 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
   ];
 
   const handleAddCard = () => {
+    if (isPublic) return;
     setIsAddCardDialogOpen(true);
   };
 
   const handleEditCard = (card: DashboardCardType) => {
+    if (isPublic) return;
     setEditingCard(card);
     setCardTitle(card.title);
     setSelectedDataSource(card.dataSourceId || "");
@@ -148,13 +153,87 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
   };
 
 
+
+  // Update canvas size when cards change (grow-only based on card extents)
+  useEffect(() => {
+    const cardsArray = cards as DashboardCardType[];
+    
+    let maxX = 0;
+    let maxY = 0;
+
+    cardsArray.forEach(card => {
+      const cardPos = card.position as { x: number; y: number };
+      const cardSize = card.size as { width: number; height: number };
+      maxX = Math.max(maxX, cardPos.x + cardSize.width);
+      maxY = Math.max(maxY, cardPos.y + cardSize.height);
+    });
+
+    // Add padding and ensure minimum size (grow-only to prevent oscillation)
+    const padding = 200;
+    setCanvasSize(prev => {
+      const newWidth = Math.max(prev.width, maxX + padding, 1200);
+      const newHeight = Math.max(prev.height, maxY + padding, 800);
+      return (prev.width !== newWidth || prev.height !== newHeight) 
+        ? { width: newWidth, height: newHeight }
+        : prev;
+    });
+  }, [cards]);
+
+  // ResizeObserver for viewport size
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setViewportSize(prev => (prev.width !== width || prev.height !== height) ? { width, height } : prev);
+      }
+    });
+
+    resizeObserver.observe(canvasRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  // Auto-grow functionality when card approaches edges
+  const handleNearEdge = useCallback((cardId: string, position: { x: number; y: number }, size: { width: number; height: number }) => {
+    if (isPublic) return;
+    
+    const threshold = 60; // Trigger expansion when within 60px of edge
+    const padding = 200; // Add this much space when expanding
+    
+    let newWidth = canvasSize.width;
+    let newHeight = canvasSize.height;
+    
+    // Check if approaching right edge
+    if (position.x + size.width > canvasSize.width - threshold) {
+      newWidth = position.x + size.width + padding;
+    }
+    
+    // Check if approaching bottom edge
+    if (position.y + size.height > canvasSize.height - threshold) {
+      newHeight = position.y + size.height + padding;
+    }
+    
+    // Update canvas size if needed
+    if (newWidth > canvasSize.width || newHeight > canvasSize.height) {
+      setCanvasSize(prev => {
+        const nextSize = { 
+          width: Math.max(newWidth, prev.width), 
+          height: Math.max(newHeight, prev.height) 
+        };
+        return (prev.width !== nextSize.width || prev.height !== nextSize.height) ? nextSize : prev;
+      });
+    }
+  }, [isPublic, canvasSize]);
+
   const handleCardPositionChange = useCallback((cardId: string, position: { x: number; y: number }, size?: { width: number; height: number }) => {
+    if (isPublic) return;
     const updates: any = { position };
     if (size) {
       updates.size = size;
     }
     updateCardMutation.mutate({ cardId, updates });
-  }, [dashboard.id, updateCardMutation]);
+  }, [isPublic, dashboard.id, updateCardMutation]);
 
   const handleCreateCard = (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,38 +326,69 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
       <div 
         ref={canvasRef}
         className="flex-1 dashboard-canvas relative bg-muted/30 m-4 rounded-lg overflow-auto"
-        style={{ 
-          backgroundImage: "radial-gradient(circle, hsl(var(--muted)) 1px, transparent 1px)",
-          backgroundSize: "20px 20px"
-        }}
         data-testid="dashboard-canvas"
       >
-        {isLoading ? (
-          <div className="p-4">
-            <div className="text-center text-muted-foreground">Loading cards...</div>
-          </div>
-        ) : (cards as DashboardCardType[]).length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <Plus className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">No cards yet</h3>
-              <p className="text-muted-foreground mb-4">Add your first card to start visualizing data</p>
-              <Button onClick={handleAddCard} data-testid="button-add-first-card">
-                Add Card
-              </Button>
+        <div
+          ref={innerCanvasRef}
+          className="relative"
+          style={{ 
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`,
+            minWidth: "100%",
+            minHeight: "100%",
+            backgroundImage: "radial-gradient(circle, hsl(var(--muted)) 1px, transparent 1px)",
+            backgroundSize: "20px 20px"
+          }}
+        >
+          {isLoading ? (
+            <div className="p-4">
+              <div className="text-center text-muted-foreground">Loading cards...</div>
             </div>
-          </div>
-        ) : (
-          (cards as DashboardCardType[]).map((card: DashboardCardType) => (
-            <DashboardCard
-              key={card.id}
-              card={card}
-              onPositionChange={handleCardPositionChange}
-              onEdit={handleEditCard}
-              isPublic={isPublic}
-            />
-          ))
-        )}
+          ) : (cards as DashboardCardType[]).length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                {isPublic ? (
+                  <span className="mx-auto mb-4 inline-flex items-center justify-center w-14 h-14 rounded-full bg-foreground/80">
+                    <Ban className="w-8 h-8 text-white" />
+                  </span>
+                ) : (
+                  <Plus className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                )}
+                <h3 className="text-lg font-medium text-foreground mb-2 flex items-center justify-center gap-2">
+                  {isPublic && (
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-foreground/80">
+                      <Ban className="w-4 h-4 text-white" />
+                    </span>
+                  )}
+                  No cards yet
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  {isPublic 
+                    ? "Contact your system administrator to add a card."
+                    : "Add your first card to start visualizing data"
+                  }
+                </p>
+                {!isPublic && (
+                  <Button onClick={handleAddCard} data-testid="button-add-first-card">
+                    Add Card
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            (cards as DashboardCardType[]).map((card: DashboardCardType) => (
+              <DashboardCard
+                key={card.id}
+                card={card}
+                onPositionChange={handleCardPositionChange}
+                onEdit={handleEditCard}
+                isPublic={isPublic}
+                canvasRef={canvasRef}
+                onNearEdge={handleNearEdge}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       <Dialog open={isAddCardDialogOpen} onOpenChange={setIsAddCardDialogOpen}>

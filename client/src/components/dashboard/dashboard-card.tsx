@@ -14,9 +14,11 @@ interface DashboardCardProps {
   onPositionChange: (cardId: string, position: { x: number; y: number }, size?: { width: number; height: number }) => void;
   onEdit?: (card: DashboardCardType) => void;
   isPublic?: boolean;
+  canvasRef?: React.RefObject<HTMLDivElement>;
+  onNearEdge?: (cardId: string, position: { x: number; y: number }, size: { width: number; height: number }) => void;
 }
 
-export function DashboardCard({ card, onPositionChange, onEdit, isPublic = false }: DashboardCardProps) {
+export function DashboardCard({ card, onPositionChange, onEdit, isPublic = false, canvasRef, onNearEdge }: DashboardCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [position, setPosition] = useState(card.position as { x: number; y: number });
@@ -28,6 +30,9 @@ export function DashboardCard({ card, onPositionChange, onEdit, isPublic = false
   const queryClient = useQueryClient();
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Prevent dragging in public mode
+    if (isPublic) return;
+    
     const target = e.target as HTMLElement;
     
     // Don't start dragging if clicking on buttons or resize handles
@@ -37,22 +42,51 @@ export function DashboardCard({ card, onPositionChange, onEdit, isPublic = false
     
     e.preventDefault();
     setIsDragging(true);
+    
+    // Get canvas offset and scroll position for accurate coordinate calculation
+    let canvasRect = { left: 0, top: 0 };
+    let scrollLeft = 0;
+    let scrollTop = 0;
+    
+    if (canvasRef?.current) {
+      canvasRect = canvasRef.current.getBoundingClientRect();
+      scrollLeft = canvasRef.current.scrollLeft;
+      scrollTop = canvasRef.current.scrollTop;
+    }
+    
     dragStart.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
+      x: e.clientX - canvasRect.left + scrollLeft - position.x,
+      y: e.clientY - canvasRect.top + scrollTop - position.y,
     };
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (isDragging && dragStart.current) {
-      const newX = Math.max(0, e.clientX - dragStart.current.x);
-      const newY = Math.max(0, e.clientY - dragStart.current.y);
+      // Get canvas offset and scroll position for accurate coordinate calculation
+      let canvasRect = { left: 0, top: 0 };
+      let scrollLeft = 0;
+      let scrollTop = 0;
+      
+      if (canvasRef?.current) {
+        canvasRect = canvasRef.current.getBoundingClientRect();
+        scrollLeft = canvasRef.current.scrollLeft;
+        scrollTop = canvasRef.current.scrollTop;
+      }
+      
+      const newX = Math.max(0, e.clientX - canvasRect.left + scrollLeft - dragStart.current.x);
+      const newY = Math.max(0, e.clientY - canvasRect.top + scrollTop - dragStart.current.y);
       
       // Snap to 20px grid
       const snappedX = Math.round(newX / 20) * 20;
       const snappedY = Math.round(newY / 20) * 20;
       
-      setPosition({ x: snappedX, y: snappedY });
+      const newPosition = { x: snappedX, y: snappedY };
+      setPosition(newPosition);
+      
+      // Check if near edge and trigger auto-grow
+      if (onNearEdge) {
+        onNearEdge(card.id, newPosition, size);
+      }
     }
   };
 
@@ -69,6 +103,9 @@ export function DashboardCard({ card, onPositionChange, onEdit, isPublic = false
 
   // Add resize functionality
   const handleResizeStart = (e: React.MouseEvent) => {
+    // Prevent resizing in public mode
+    if (isPublic) return;
+    
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
@@ -92,7 +129,13 @@ export function DashboardCard({ card, onPositionChange, onEdit, isPublic = false
       const snappedWidth = Math.round(newWidth / 20) * 20;
       const snappedHeight = Math.round(newHeight / 20) * 20;
       
-      setSize({ width: snappedWidth, height: snappedHeight });
+      const newSize = { width: snappedWidth, height: snappedHeight };
+      setSize(newSize);
+      
+      // Trigger auto-grow for resize operations
+      if (onNearEdge) {
+        onNearEdge(card.id, position, newSize);
+      }
     }
   };
 
