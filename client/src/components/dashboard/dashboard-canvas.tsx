@@ -29,11 +29,14 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
   const queryClient = useQueryClient();
 
   const { data: cards = [], isLoading } = useQuery({
-    queryKey: ["/api/dashboards", dashboard.id, "cards"],
+    queryKey: isPublic 
+      ? ["/api/public/dashboards", dashboard.id, "cards"]
+      : ["/api/dashboards", dashboard.id, "cards"],
   });
 
   const { data: dataSources = [] } = useQuery({
     queryKey: ["/api/data-sources"],
+    enabled: !isPublic, // Only fetch data sources for authenticated dashboard editing
   });
 
   const createCardMutation = useMutation({
@@ -265,6 +268,7 @@ export function DashboardCanvas({ dashboard, onBack, isPublic = false }: Dashboa
               card={card}
               onPositionChange={handleCardPositionChange}
               onEdit={handleEditCard}
+              isPublic={isPublic}
             />
           ))
         )}

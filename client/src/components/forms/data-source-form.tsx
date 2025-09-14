@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Link, Globe, Database, Plus, PlayCircle, CheckCircle, AlertCircle, Clock, Ticket, Headphones } from "lucide-react";
+import { Link, Globe, Database, Plus, PlayCircle, CheckCircle, AlertCircle, Clock, Ticket, Headphones, Edit, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,8 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
   const [jiraProjects, setJiraProjects] = useState<any[]>([]);
   const [selectedJiraProject, setSelectedJiraProject] = useState((dataSource?.config as any)?.selectedJiraProject || "");
   const [jiraQuery, setJiraQuery] = useState((dataSource?.config as any)?.jiraQuery || "");
+  const [jiraSavedFilters, setJiraSavedFilters] = useState<any[]>([]);
+  const [selectedJiraSavedFilter, setSelectedJiraSavedFilter] = useState("");
   
   // SMAX-specific states
   const [smaxUrl, setSmaxUrl] = useState((dataSource?.config as any)?.smaxUrl || "");
@@ -148,9 +150,12 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
       const responseData = await response.json();
       setTestResults(responseData);
       
-      // For JIRA, set the projects if returned
+      // For JIRA, set the projects and saved filters if returned
       if (selectedType === "jira" && responseData.projects) {
         setJiraProjects(responseData.projects);
+        if (responseData.savedFilters) {
+          setJiraSavedFilters(responseData.savedFilters);
+        }
       }
       
       // For SMAX, set the services if returned
@@ -191,7 +196,7 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
     if (selectedType === "api") {
       config = { curlRequest, selectedFields, fieldDisplayNames, refreshInterval, refreshUnit };
     } else if (selectedType === "jira") {
-      config = { jiraUrl, jiraUsername, jiraPassword, selectedJiraProject, jiraQuery, selectedFields, fieldDisplayNames, refreshInterval, refreshUnit };
+      config = { jiraUrl, jiraUsername, jiraPassword, selectedJiraProject, jiraQuery, selectedJiraSavedFilter, selectedFields, fieldDisplayNames, refreshInterval, refreshUnit };
     } else if (selectedType === "smax") {
       config = { smaxUrl, smaxUsername, smaxPassword, selectedSmaxService, smaxQuery, selectedFields, fieldDisplayNames, refreshInterval, refreshUnit };
     }
@@ -399,6 +404,59 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
             </div>
           )}
           
+          {/* Saved Filters Selection */}
+          {jiraSavedFilters.length > 0 && selectedJiraProject && (
+            <div className="space-y-2">
+              <Label htmlFor="jiraSavedFilter">Use Saved Filter</Label>
+              <Select 
+                value={selectedJiraSavedFilter} 
+                onValueChange={(value) => {
+                  setSelectedJiraSavedFilter(value);
+                  if (value === "custom") {
+                    setJiraQuery(""); // Clear custom query when switching to custom
+                  } else if (value) {
+                    // Find the selected filter and set its JQL (fix ID type mismatch)
+                    const filter = jiraSavedFilters.find(f => String(f.id) === value);
+                    if (filter) {
+                      setJiraQuery(filter.jql || "");
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger data-testid="select-jira-saved-filter">
+                  <SelectValue placeholder="Select saved filter or custom JQL" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom">
+                    <div className="flex items-center">
+                      <Edit className="w-4 h-4 mr-2" />
+                      Custom JQL Query
+                    </div>
+                  </SelectItem>
+                  {jiraSavedFilters.map((filter) => (
+                    <SelectItem key={filter.id} value={String(filter.id)}>
+                      <div className="flex items-center">
+                        {filter.favourite && <Star className="w-4 h-4 mr-2 text-yellow-500" />}
+                        <div>
+                          <div className="font-medium">{filter.name}</div>
+                          {filter.description && (
+                            <div className="text-xs text-muted-foreground">{filter.description}</div>
+                          )}
+                          <div className="text-xs text-muted-foreground">by {filter.owner}</div>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedJiraSavedFilter && selectedJiraSavedFilter !== "custom" && (
+                <div className="bg-muted/30 rounded-md p-3 text-sm text-muted-foreground">
+                  <p><strong>Filter JQL:</strong> {jiraSavedFilters.find(f => String(f.id) === selectedJiraSavedFilter)?.jql}</p>
+                </div>
+              )}
+            </div>
+          )}
+          
           {selectedJiraProject && (
             <div className="space-y-2">
               <Label htmlFor="jiraQuery">JIRA Query (JQL)</Label>
@@ -433,6 +491,11 @@ export function DataSourceForm({ dataSource, onSuccess, onCancel }: DataSourceFo
                     
                     const response = await apiRequest("POST", "/api/data-sources/test", testData);
                     const responseData = await response.json();
+                    
+                    // Update saved filters if returned from query test
+                    if (responseData.savedFilters) {
+                      setJiraSavedFilters(responseData.savedFilters);
+                    }
                     
                     // Simulate fetching sample data to show available fields
                     const sampleFields = [

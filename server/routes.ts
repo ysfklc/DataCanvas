@@ -428,6 +428,195 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public data source data endpoint - for public dashboards only
+  app.get("/api/public/data-sources/:id/data", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const dataSource = await storage.getDataSource(id);
+      
+      if (!dataSource) {
+        return res.status(404).json({ message: "Data source not found" });
+      }
+
+      // Verify this data source is used in at least one public dashboard
+      const allDashboards = await storage.getAllDashboards();
+      let isUsedInPublicDashboard = false;
+      
+      for (const dashboard of allDashboards) {
+        if (dashboard.isPublic) {
+          const cards = await storage.getCardsByDashboard(dashboard.id);
+          if (cards.some(card => card.dataSourceId === id)) {
+            isUsedInPublicDashboard = true;
+            break;
+          }
+        }
+      }
+
+      if (!isUsedInPublicDashboard) {
+        return res.status(404).json({ message: "Data source not found" });
+      }
+
+      // Now we can serve the data using the same logic as the authenticated endpoint
+      // Update last pull time to track actual data pulls
+      await storage.updateDataSource(id, { lastPullAt: new Date() });
+
+      if (dataSource.type === "api" && (dataSource.config as any)?.curlRequest) {
+        try {
+          const curlRequest = (dataSource.config as any).curlRequest.trim();
+          const urlMatch = curlRequest.match(/'([^']+)'|"([^"]+)"|(\S+)/g);
+          let url = '';
+          const headers: Record<string, string> = {};
+          
+          for (let i = 0; i < urlMatch?.length; i++) {
+            const part = urlMatch[i].replace(/['"]/g, '');
+            if (part.startsWith('http')) {
+              url = part;
+            } else if (part === '-H' && i + 1 < urlMatch.length) {
+              const header = urlMatch[i + 1].replace(/['"]/g, '');
+              const [key, ...valueParts] = header.split(':');
+              if (key && valueParts.length > 0) {
+                headers[key.trim()] = valueParts.join(':').trim();
+              }
+            }
+          }
+          
+          if (!url) {
+            return res.json({
+              data: [],
+              fields: [],
+              lastUpdated: new Date().toISOString(),
+              error: "Could not parse URL from cURL request"
+            });
+          }
+          
+          const response = await fetch(url, {
+            method: 'GET',
+            headers,
+          });
+          
+          const responseText = await response.text();
+          let parsedResponse;
+          
+          try {
+            parsedResponse = JSON.parse(responseText);
+          } catch {
+            parsedResponse = { raw: responseText };
+          }
+          
+          const extractFields = (obj: any, prefix = ''): string[] => {
+            let fields: string[] = [];
+            if (typeof obj === 'object' && obj !== null) {
+              if (Array.isArray(obj)) {
+                if (obj.length > 0) {
+                  fields = fields.concat(extractFields(obj[0], prefix));
+                }
+              } else {
+                Object.keys(obj).forEach(key => {
+                  const fieldName = prefix ? `${prefix}.${key}` : key;
+                  fields.push(fieldName);
+                  if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                    fields = fields.concat(extractFields(obj[key], fieldName));
+                  }
+                });
+              }
+            }
+            return fields;
+          };
+          
+          const fields = extractFields(parsedResponse);
+          
+          res.json({
+            data: Array.isArray(parsedResponse) ? parsedResponse : [parsedResponse],
+            fields,
+            lastUpdated: new Date().toISOString()
+          });
+        } catch (error: any) {
+          res.json({
+            data: [],
+            fields: [],
+            lastUpdated: new Date().toISOString(),
+            error: error.message || "Failed to fetch API data"
+          });
+        }
+      } else if (dataSource.type === "jira") {
+        try {
+          const config = dataSource.config as any;
+          const auth = Buffer.from(`${config.jiraUsername}:${config.jiraPassword}`).toString('base64');
+          const baseUrl = config.jiraUrl.replace(/\/$/, '');
+          
+          const jql = config.jiraQuery || `project = ${config.selectedJiraProject}`;
+          const url = `${baseUrl}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=100`;
+          
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`JIRA API error: ${response.status} ${response.statusText}`);
+          }
+          
+          const jiraData = await response.json();
+          
+          const formattedData = jiraData.issues.map((issue: any) => ({
+            key: issue.key,
+            summary: issue.fields.summary,
+            status: issue.fields.status.name,
+            assignee: issue.fields.assignee?.displayName || 'Unassigned',
+            reporter: issue.fields.reporter?.displayName || 'Unknown',
+            priority: issue.fields.priority?.name || 'None',
+            issueType: issue.fields.issuetype?.name,
+            created: issue.fields.created,
+            updated: issue.fields.updated,
+            resolved: issue.fields.resolutiondate,
+            project: issue.fields.project.name,
+            projectKey: issue.fields.project.key,
+            description: issue.fields.description,
+            labels: Array.isArray(issue.fields.labels) ? issue.fields.labels.join(', ') : '',
+            components: Array.isArray(issue.fields.components) ? 
+              issue.fields.components.map((c: any) => c.name).join(', ') : '',
+            fixVersions: Array.isArray(issue.fields.fixVersions) ? 
+              issue.fields.fixVersions.map((v: any) => v.name).join(', ') : '',
+            storyPoints: issue.fields.customfield_10016 || '',
+            sprint: issue.fields.customfield_10020 && Array.isArray(issue.fields.customfield_10020) && issue.fields.customfield_10020.length > 0 ? 
+              (Array.isArray(issue.fields.customfield_10020) && issue.fields.customfield_10020.length > 0 ? 
+                issue.fields.customfield_10020[issue.fields.customfield_10020.length - 1].name : '') : ''
+          }));
+          
+          const fields = ['key', 'summary', 'status', 'assignee', 'reporter', 'priority', 'issueType', 'created', 'updated', 'resolved', 'project', 'projectKey', 'description', 'labels', 'components', 'fixVersions', 'storyPoints', 'sprint'];
+          
+          res.json({
+            data: formattedData,
+            fields,
+            lastUpdated: new Date().toISOString()
+          });
+        } catch (error: any) {
+          console.error("JIRA data fetch error:", error);
+          res.json({
+            data: [],
+            fields: [],
+            lastUpdated: new Date().toISOString(),
+            error: error.message || "Failed to fetch JIRA data"
+          });
+        }
+      } else {
+        // For other data source types, return empty data
+        res.json({
+          data: [],
+          fields: [],
+          lastUpdated: new Date().toISOString(),
+          error: "Data source type not supported in public mode"
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch data source data" });
+    }
+  });
+
   app.post("/api/dashboards", requireAuth, async (req, res) => {
     try {
       const user = req.session.user!;
@@ -649,6 +838,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error('JIRA authentication failed: Invalid projects data returned');
           }
           
+          // Fetch saved filters
+          let savedFilters: any[] = [];
+          try {
+            // First try to fetch favorite filters
+            const favFiltersResponse = await fetch(`${baseUrl}/rest/api/2/filter/favourite`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json'
+              }
+            });
+            
+            if (favFiltersResponse.ok) {
+              const favFilters = await favFiltersResponse.json();
+              if (Array.isArray(favFilters)) {
+                savedFilters = savedFilters.concat(favFilters.map((filter: any) => ({
+                  id: filter.id,
+                  name: filter.name,
+                  description: filter.description,
+                  jql: filter.jql,
+                  favourite: true,
+                  owner: filter.owner?.displayName || filter.owner?.name || 'Unknown'
+                })));
+              }
+            }
+            
+            // Then try to fetch additional accessible filters via search (limit to 20 for performance)
+            const searchFiltersResponse = await fetch(`${baseUrl}/rest/api/2/filter/search?maxResults=20`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json'
+              }
+            });
+            
+            if (searchFiltersResponse.ok) {
+              const searchResult = await searchFiltersResponse.json();
+              if (searchResult.values && Array.isArray(searchResult.values)) {
+                // Add non-favorite filters that aren't already in the list
+                const existingFilterIds = new Set(savedFilters.map(f => f.id));
+                const additionalFilters = searchResult.values
+                  .filter((filter: any) => !existingFilterIds.has(filter.id))
+                  .map((filter: any) => ({
+                    id: filter.id,
+                    name: filter.name,
+                    description: filter.description,
+                    jql: filter.jql,
+                    favourite: false,
+                    owner: filter.owner?.displayName || filter.owner?.name || 'Unknown'
+                  }));
+                  
+                savedFilters = savedFilters.concat(additionalFilters);
+              }
+            }
+          } catch (filterError: any) {
+            // Don't fail the entire request if filter fetching fails, just log it
+            console.warn("Failed to fetch JIRA saved filters:", filterError.message);
+          }
+          
           res.json({
             success: true,
             message: "JIRA connection successful",
@@ -663,6 +911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               emailAddress: userInfo.emailAddress,
               accountId: userInfo.accountId
             },
+            savedFilters: savedFilters,
             jiraUrl: baseUrl
           });
         } catch (error: any) {

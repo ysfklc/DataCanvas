@@ -8,15 +8,16 @@ interface ChartRendererProps {
   type: string;
   config: any;
   dataSourceId: string | null;
+  isPublic?: boolean;
 }
 
-export function ChartRenderer({ type, config, dataSourceId }: ChartRendererProps) {
+export function ChartRenderer({ type, config, dataSourceId, isPublic = false }: ChartRendererProps) {
   const [refreshInterval, setRefreshInterval] = useState<number | false>(false);
 
   // Get data source info to determine refresh settings
   const { data: dataSourceInfo } = useQuery({
     queryKey: ["/api/data-sources", dataSourceId],
-    enabled: !!dataSourceId,
+    enabled: !!dataSourceId && !isPublic, // Don't fetch data source info for public dashboards
   });
 
   // Calculate refresh interval in milliseconds
@@ -57,7 +58,9 @@ export function ChartRenderer({ type, config, dataSourceId }: ChartRendererProps
   }, [dataSourceInfo]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["/api/data-sources", dataSourceId, "data"],
+    queryKey: isPublic
+      ? ["/api/public/data-sources", dataSourceId, "data"]
+      : ["/api/data-sources", dataSourceId, "data"],
     enabled: !!dataSourceId,
     refetchInterval: refreshInterval,
   });

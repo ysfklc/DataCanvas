@@ -13,9 +13,10 @@ interface DashboardCardProps {
   card: DashboardCardType;
   onPositionChange: (cardId: string, position: { x: number; y: number }, size?: { width: number; height: number }) => void;
   onEdit?: (card: DashboardCardType) => void;
+  isPublic?: boolean;
 }
 
-export function DashboardCard({ card, onPositionChange, onEdit }: DashboardCardProps) {
+export function DashboardCard({ card, onPositionChange, onEdit, isPublic = false }: DashboardCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [position, setPosition] = useState(card.position as { x: number; y: number });
@@ -211,6 +212,7 @@ export function DashboardCard({ card, onPositionChange, onEdit }: DashboardCardP
             type={card.visualizationType}
             config={card.config as any}
             dataSourceId={card.dataSourceId}
+            isPublic={isPublic}
           />
         </div>
       </div>
